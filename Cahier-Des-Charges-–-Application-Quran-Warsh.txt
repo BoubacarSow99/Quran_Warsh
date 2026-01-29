@@ -1,0 +1,186 @@
+Cahier des charges – Application Quran Warsh
+1. Présentation du projet
+Nom de l’application : Quran Warsh
+Type : Application mobile (Android / iOS) et/ou Web
+Domaine : Religion – Lecture et écoute du Saint Coran
+Récitation principale : Riwaya Warsh ‘an Nafi‘
+
+
+1.1 Contexte
+
+L’application Quran Warsh a pour objectif de proposer une plateforme simple, fiable et respectueuse
+permettant la lecture et l’écoute du Saint Coran exclusivement selon la récitation Warsh, très répandue
+en Afrique de l’Ouest et du Nord.
+
+
+1.2 Objectifs
+
+     • Faciliter l’accès au Coran en riwaya Warsh
+     • Offrir une expérience fluide de lecture et d’écoute
+     • Mettre en valeur la calligraphie arabe sans traduction
+     • Permettre une utilisation hors ligne
+
+
+
+
+2. Public cible
+     • Musulmans francophones et arabophones
+     • Étudiants en sciences islamiques
+     • Fidèles souhaitant écouter ou lire le Coran en Warsh
+     • Utilisateurs mobiles (priorité Android)
+
+
+
+
+3. Fonctionnalités principales
+
+3.1 Lecture du Coran
+
+     • Texte complet du Coran en arabe uniquement
+     • Récitation Warsh respectant le rasm ‘Uthmânî
+     • Affichage par :
+     • Sourate
+     • Juz’
+     • Hizb
+     • Zoom du texte (taille de police ajustable)
+     • Mode nuit / mode jour
+
+3.2 Écoute audio
+
+     • Écoute du Coran récité en Warsh
+     • Choix de plusieurs récitateurs (exemples) :
+
+
+
+
+                                                     1
+     • Sheikh Mahmoud Khalil Al-Hussary (Warsh)
+     • Sheikh Yassin Al-Jazaery
+     • Sheikh Ibrahim Ad-Dossary (Warsh si disponible)
+     • Lecture :
+     • Par sourate
+     • Par verset
+     • Commandes audio :
+     • Lecture / Pause
+     • Verset précédent / suivant
+     • Lecture en boucle
+
+3.3 Recherche
+
+     • Recherche par :
+     • Nom de sourate
+     • Numéro de sourate
+     • Numéro de verset
+     • Suggestions automatiques
+
+3.4 Favoris et reprise
+
+     • Marquer une sourate ou un verset en favori
+     • Reprendre automatiquement à la dernière lecture
+
+3.5 Mode hors ligne
+
+     • Téléchargement des sourates audio
+     • Accès au texte sans connexion Internet
+
+
+
+
+4. Fonctionnalités secondaires
+     • Indication de la sourate et du verset en cours
+     • Barre de progression audio
+     • Affichage discret des numéros de versets
+     • Paramètres utilisateur :
+     • Taille de police
+     • Récitateur par défaut
+     • Téléchargement automatique ou manuel
+
+
+
+
+5. Contraintes techniques
+
+5.1 Technologies possibles
+
+Mobile : - React Native (Expo)
+
+
+Web (optionnel) : - Next.js
+
+
+API Coran : - API publique compatible Warsh (ex : Quran API, EveryAyah – Warsh)
+
+
+
+
+                                                    2
+5.2 Performances
+
+    • Chargement rapide du texte
+    • Streaming audio fluide même avec connexion lente
+    • Faible consommation de données
+
+
+
+
+6. Design & UX/UI
+
+6.1 Principes
+
+    • Design sobre et respectueux
+    • Couleurs douces (vert, beige, noir)
+    • Pas de publicité intrusive
+
+6.2 Navigation
+
+    • Navigation simple par onglets :
+    • Accueil
+    • Sourates
+    • Recherche
+    • Favoris
+    • Paramètres
+
+
+
+
+7. Sécurité et conformité
+    • Pas de collecte de données personnelles sensibles
+    • Pas de compte utilisateur obligatoire
+    • Respect du contenu religieux (aucune modification du texte)
+
+
+
+
+8. Évolutions futures
+    • Ajout du tajwid coloré (Warsh)
+    • Mode répétition pour mémorisation
+    • Minuteur de lecture
+    • Widgets (mobile)
+
+
+
+
+9. Planning prévisionnel (indicatif)
+    • Analyse & conception : 1 semaine
+    • Développement MVP : 3–4 semaines
+    • Tests : 1 semaine
+    • Déploiement : 1 semaine
+
+
+
+
+                                                 3
+10. Livrables attendus
+     • Application fonctionnelle
+     • Code source documenté
+     • Guide d’utilisation utilisateur
+
+
+
+Fin du cahier des charges – Quran Warsh
+
+
+
+
+                                          4
+
