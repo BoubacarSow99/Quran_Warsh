@@ -1,0 +1,91 @@
+// Quran API Service – using AlQuran.cloud API with Warsh edition
+// Docs: https://alquran.cloud/api
+
+export interface Surah {
+    number: number;
+    name: string;           // arabic
+    englishName: string;
+    englishNameTranslation: string;
+    revelationType: string; // Meccan | Medinan
+    numberOfAyahs: number;
+}
+
+export interface Ayah {
+    number: number;         // absolute ayah number (1-6236)
+    numberInSurah: number;  // ayah number within the surah
+    text: string;           // arabic text (Warsh)
+    surah: {
+        number: number;
+        name: string;
+    };
+    juz: number;
+    hizb: number;
+    hizbQuarter: number;
+    page: number;
+}
+
+export interface SurahDetail {
+    number: number;
+    name: string;
+    englishName: string;
+    revelationType: string;
+    ayahs: Ayah[];
+}
+
+const BASE_URL = 'https://api.alquran.cloud/v1';
+// Warsh 'an Nafi' edition identifier on AlQuran.cloud
+const WARSH_EDITION = 'quran-warsh-hafs';
+// Fallback to standard arabic text (Hafs) if Warsh edition has issues
+const ARABIC_EDITION = 'quran-simple-clean';
+
+async function apiFetch<T>(endpoint: string): Promise<T> {
+    const response = await fetch(`${BASE_URL}${endpoint}`);
+    if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+    const json = await response.json();
+    if (json.code !== 200) {
+        throw new Error(`API response error: ${json.status}`);
+    }
+    return json.data as T;
+}
+
+/**
+ * Get the list of all 114 surahs with metadata
+ */
+export async function getSurahList(): Promise<Surah[]> {
+    return apiFetch<Surah[]>('/surah');
+}
+
+/**
+ * Get a complete surah with all its ayahs in Arabic (Warsh)
+ */
+export async function getSurah(surahNumber: number): Promise<SurahDetail> {
+    try {
+        return await apiFetch<SurahDetail>(`/surah/${surahNumber}/${WARSH_EDITION}`);
+    } catch {
+        // Fallback to standard Arabic if Warsh edition unavailable
+        return apiFetch<SurahDetail>(`/surah/${surahNumber}/${ARABIC_EDITION}`);
+    }
+}
+
+/**
+ * Get a specific ayah
+ */
+export async function getAyah(surahNumber: number, ayahNumber: number): Promise<Ayah> {
+    const data = await apiFetch<Ayah>(`/ayah/${surahNumber}:${ayahNumber}/${ARABIC_EDITION}`);
+    return data;
+}
+
+/**
+ * Search surahs by name (arabic or latin)
+ */
+export function searchSurahs(surahs: Surah[], query: string): Surah[] {
+    const q = query.toLowerCase().trim();
+    if (!q) return surahs;
+    return surahs.filter(s =>
+        s.englishName.toLowerCase().includes(q) ||
+        s.name.includes(q) ||
+        s.number.toString() === q
+    );
+}
