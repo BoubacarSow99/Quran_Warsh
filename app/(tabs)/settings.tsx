@@ -113,6 +113,23 @@ export default function SettingsScreen() {
             </View>
 
 
+            {/* À propos */}
+            <View style={s.section}>
+                <Text style={s.sectionTitle}>À propos</Text>
+                <Text style={[s.label, { marginBottom: 8 }]}>al-Qur'an (Hafs)</Text>
+                <Text style={s.sublabel}>
+                    Une application moderne pour la lecture et l'écoute du Saint Coran,
+                    conçue pour offrir une expérience fluide et premium.
+                </Text>
+                <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+                    <Text style={s.label}>Développeur</Text>
+                    <Text style={[s.primaryText, { fontWeight: 'bold', fontSize: 16, marginTop: 4 }]}>
+                        Artemis99 (Boubacar Sow)
+                    </Text>
+                </View>
+            </View>
+
+
             {/* Version */}
             <Text style={s.version}>Quran Hafs v1.0.0 · Récitation Hafs 'an Asim</Text>
 
@@ -242,4 +259,5 @@ const styles = (colors: any) =>
             textAlign: 'center',
             marginTop: 8,
         },
+        primaryText: { color: colors.primary },
     });

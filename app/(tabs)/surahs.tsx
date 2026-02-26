@@ -12,6 +12,9 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
 import { getSurahList, Surah } from '../../services/quranApi';
 
+import { Ionicons } from '@expo/vector-icons';
+import { useFavorites } from '../../hooks/useFavorites';
+
 const REVELATION_LABEL: Record<string, string> = {
     Meccan: 'Mecquoise',
     Medinan: 'Médinoise',
@@ -21,6 +24,7 @@ const REVELATION_LABEL: Record<string, string> = {
 export default function SurahsScreen() {
     const { colors } = useTheme();
     const router = useRouter();
+    const { isSurahFav, toggleSurah } = useFavorites();
     const [surahs, setSurahs] = useState<Surah[]>([]);
     const [filtered, setFiltered] = useState<Surah[]>([]);
     const [query, setQuery] = useState('');
@@ -123,7 +127,19 @@ export default function SurahsScreen() {
                         </View>
 
                         {/* Nom arabe */}
-                        <Text style={s.surahArabic}>{item.name}</Text>
+                        <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 15 }}>
+                            <Text style={s.surahArabic}>{item.name}</Text>
+                            <TouchableOpacity
+                                onPress={() => toggleSurah(item.number)}
+                                style={{ padding: 4 }}
+                            >
+                                <Ionicons
+                                    name={isSurahFav(item.number) ? "heart" : "heart-outline"}
+                                    size={24}
+                                    color={isSurahFav(item.number) ? colors.primary : colors.textMuted}
+                                />
+                            </TouchableOpacity>
+                        </View>
                     </TouchableOpacity>
                 )}
                 ItemSeparatorComponent={() => <View style={s.separator} />}

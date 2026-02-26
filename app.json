@@ -1,13 +1,13 @@
 {
   "expo": {
     "name": "Quran Hafs",
-    "slug": "quran-warsh",
+    "slug": "al-quran-hafs",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "scheme": "quranwarsh",
+    "scheme": "alquranhafs",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.quranwarsh.app"
+      "bundleIdentifier": "com.alquranhafs.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.quranwarsh.app",
+      "package": "com.alquranhafs.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -32,12 +32,7 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-av",
-        {
-          "microphonePermission": false
-        }
-      ]
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

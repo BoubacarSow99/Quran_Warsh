@@ -1,4 +1,4 @@
-// Quran API Service – using AlQuran.cloud API with Warsh edition
+// Quran API Service – using AlQuran.cloud API with Hafs edition
 // Docs: https://alquran.cloud/api
 
 export interface Surah {
@@ -13,7 +13,7 @@ export interface Surah {
 export interface Ayah {
     number: number;         // absolute ayah number (1-6236)
     numberInSurah: number;  // ayah number within the surah
-    text: string;           // arabic text (Warsh)
+    text: string;           // arabic text (Hafs)
     surah: {
         number: number;
         name: string;
@@ -58,7 +58,7 @@ export async function getSurahList(): Promise<Surah[]> {
 }
 
 /**
- * Get a complete surah with all its ayahs in Arabic (Warsh)
+ * Get a complete surah with all its ayahs in Arabic (Hafs)
  */
 export async function getSurah(surahNumber: number): Promise<SurahDetail> {
     try {

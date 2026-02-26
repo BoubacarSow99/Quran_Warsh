@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../hooks/useTheme';
 
 function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
@@ -10,6 +11,10 @@ function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
 
 export default function TabsLayout() {
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
+
+    // Base tab bar height + safe area inset for Android nav bar
+    const tabBarHeight = 56 + insets.bottom;
 
     return (
         <Tabs
@@ -18,8 +23,8 @@ export default function TabsLayout() {
                     backgroundColor: colors.tabBar,
                     borderTopColor: colors.tabBarBorder,
                     borderTopWidth: 1,
-                    height: 65,
-                    paddingBottom: 10,
+                    height: tabBarHeight,
+                    paddingBottom: insets.bottom + 4,
                     paddingTop: 5,
                 },
                 tabBarActiveTintColor: colors.primary,
@@ -53,15 +58,7 @@ export default function TabsLayout() {
                     headerTitle: 'Liste des Sourates',
                 }}
             />
-            <Tabs.Screen
-                name="search"
-                options={{
-                    title: 'Recherche',
-                    tabBarLabel: 'Recherche',
-                    tabBarIcon: ({ focused }) => <TabIcon icon="🔍" focused={focused} />,
-                    headerTitle: 'Recherche',
-                }}
-            />
+
             <Tabs.Screen
                 name="favorites"
                 options={{

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
     getFavoriteSurahs,
     toggleFavoriteSurah,
@@ -6,36 +7,56 @@ import {
     toggleFavoriteAyah,
     FavoriteAyah,
 } from '../services/storageService';
+import { getSurahList, Surah } from '../services/quranApi';
 
 export function useFavorites() {
     const [favSurahs, setFavSurahs] = useState<number[]>([]);
     const [favAyahs, setFavAyahs] = useState<FavoriteAyah[]>([]);
+    const [surahList, setSurahList] = useState<Surah[]>([]);
 
-    useEffect(() => {
-        reload();
-    }, []);
-
-    const reload = async () => {
-        const [surahs, ayahs] = await Promise.all([getFavoriteSurahs(), getFavoriteAyahs()]);
+    const reload = useCallback(async () => {
+        const [surahs, ayahs, fullList] = await Promise.all([
+            getFavoriteSurahs(),
+            getFavoriteAyahs(),
+            surahList.length === 0 ? getSurahList() : Promise.resolve(surahList)
+        ]);
         setFavSurahs(surahs);
         setFavAyahs(ayahs);
-    };
+        if (surahList.length === 0) setSurahList(fullList);
+    }, [surahList]);
+
+    // This ensures synchronization when switching between tabs
+    useFocusEffect(
+        useCallback(() => {
+            reload();
+        }, [reload])
+    );
 
     const toggleSurah = useCallback(async (surahNumber: number) => {
         await toggleFavoriteSurah(surahNumber);
-        const updated = await getFavoriteSurahs();
-        setFavSurahs(updated);
-    }, []);
+        await reload();
+    }, [reload]);
 
     const toggleAyah = useCallback(async (ayah: FavoriteAyah) => {
         await toggleFavoriteAyah(ayah);
-        const updated = await getFavoriteAyahs();
-        setFavAyahs(updated);
-    }, []);
+        await reload();
+    }, [reload]);
 
     const isSurahFav = (surahNumber: number) => favSurahs.includes(surahNumber);
     const isAyahFav = (surahNumber: number, ayahNumber: number) =>
         favAyahs.some(f => f.surahNumber === surahNumber && f.ayahNumber === ayahNumber);
 
-    return { favSurahs, favAyahs, toggleSurah, toggleAyah, isSurahFav, isAyahFav, reload };
+    // Get detailed info for the favorite surahs
+    const favSurahDetails = surahList.filter(s => favSurahs.includes(s.number));
+
+    return {
+        favSurahs,
+        favAyahs,
+        favSurahDetails,
+        toggleSurah,
+        toggleAyah,
+        isSurahFav,
+        isAyahFav,
+        reload
+    };
 }

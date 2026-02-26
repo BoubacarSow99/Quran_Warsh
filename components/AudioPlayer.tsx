@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { usePlayer } from '../hooks/usePlayer';
 
@@ -10,6 +11,7 @@ export function AudioPlayer() {
     const { state, play, pause, resume, next, previous, toggleLoop, stop } = usePlayer();
     const pathname = usePathname();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
 
     // The currentSurahNumber is set by initializeSurah in SurahScreen
     // and cleared by stop() when leaving. This is our source of truth for visibility.
@@ -33,7 +35,7 @@ export function AudioPlayer() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingBottom: insets.bottom + 8, height: 64 + insets.bottom }]}>
             {/* Loading / Download Progress */}
             {state.isLoading && (
                 <View style={styles.loadingOverlay}>
@@ -88,7 +90,7 @@ export function AudioPlayer() {
 const styles = StyleSheet.create({
     container: {
         backgroundColor: '#121212', // Force true dark for premium look
-        height: 80,
+        height: 64,
         position: 'absolute',
         bottom: 0,
         left: 0,
@@ -98,7 +100,7 @@ const styles = StyleSheet.create({
         flexDirection: 'column',
         justifyContent: 'center',
         paddingHorizontal: 20,
-        paddingBottom: 10,
+        // paddingBottom is applied dynamically via insets
         zIndex: 1000,
         elevation: 20,
         shadowColor: '#000',

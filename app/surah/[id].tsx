@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../hooks/useTheme';
 import { getSurah, SurahDetail, Ayah } from '../../services/quranApi';
 import { saveLastRead } from '../../services/storageService';
@@ -28,6 +29,7 @@ export default function SurahScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const player = usePlayer();
+    const insets = useSafeAreaInsets();
     const listRef = useRef<ScrollView>(null);
     const [ayahLayouts, setAyahLayouts] = useState<{ [key: number]: number }>({});
     const bismillahLayout = useRef<number>(0);
@@ -107,8 +109,12 @@ export default function SurahScreen() {
     };
 
     const handleAyahPress = (index: number) => {
-        if (player.state.isPlaying && player.state.currentSurahNumber === surah!.number && player.state.currentAyahIndex === index) {
-            player.pause();
+        if (player.state.currentSurahNumber === surah!.number && player.state.currentAyahIndex === index) {
+            if (player.state.isPlaying) {
+                player.pause();
+            } else {
+                player.resume();
+            }
         } else {
             player.play(surah!.number, index, surah!.ayahs);
         }
@@ -136,7 +142,7 @@ export default function SurahScreen() {
         <View style={s.container}>
             <ScrollView
                 ref={listRef as any}
-                contentContainerStyle={s.scrollContent}
+                contentContainerStyle={[s.scrollContent, { paddingBottom: 120 + insets.bottom }]}
                 showsVerticalScrollIndicator={false}
             >
                 <View style={s.mushafFrame}>
@@ -167,19 +173,15 @@ export default function SurahScreen() {
                             </View>
                         )}
 
-                        <View style={s.ayahsContainer}>
+                        <Text style={[s.mushafText, { fontSize: settings.fontSize, lineHeight: settings.fontSize * 1.8 }]}>
                             {surah.ayahs.map((item, index) => {
                                 let displayedText = item.text;
                                 if (surah.number !== 1 && surah.number !== 9 && index === 0) {
                                     displayedText = displayedText.replace(/^بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ\s*/, '');
                                 }
                                 return (
-                                    <TouchableOpacity
+                                    <Text
                                         key={index}
-                                        onLayout={(e) => {
-                                            const y = e.nativeEvent.layout.y;
-                                            setAyahLayouts(prev => ({ ...prev, [index]: y }));
-                                        }}
                                         onPress={() => handleAyahPress(index)}
                                         onLongPress={() => {
                                             toggleAyah({
@@ -189,23 +191,28 @@ export default function SurahScreen() {
                                                 ayahText: item.text
                                             });
                                         }}
-                                        activeOpacity={0.7}
                                         style={[
-                                            s.ayahCtn,
                                             player.state.currentAyahIndex === index &&
                                             player.state.isPlaying &&
                                             !player.state.isBismillahPlaying &&
                                             s.highlightedAyah
                                         ]}
                                     >
-                                        <Text style={[s.mushafText, { fontSize: settings.fontSize, lineHeight: settings.fontSize * 1.8 }]}>
-                                            {displayedText}{' '}
-                                            <Text style={s.ayahMarker}>﴿{item.numberInSurah}﴾ </Text>
+                                        {displayedText}{' '}
+                                        <Text style={s.ayahMarker}>
+                                            ﴿{isAyahFav(surah.number, item.numberInSurah) ? '⭐ ' : ''}{item.numberInSurah}﴾{' '}
                                         </Text>
-                                    </TouchableOpacity>
+                                        <View
+                                            onLayout={(e) => {
+                                                const y = e.nativeEvent.layout.y;
+                                                setAyahLayouts(prev => ({ ...prev, [index]: y }));
+                                            }}
+                                            style={{ width: 0, height: 0 }}
+                                        />
+                                    </Text>
                                 );
                             })}
-                        </View>
+                        </Text>
                     </View>
                 </View>
 

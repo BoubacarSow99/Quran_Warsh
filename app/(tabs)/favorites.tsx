@@ -14,13 +14,13 @@ import { useFavorites } from '../../hooks/useFavorites';
 export default function FavoritesScreen() {
     const { colors } = useTheme();
     const router = useRouter();
-    const { favSurahs, favAyahs, toggleSurah, toggleAyah } = useFavorites();
+    const { favSurahDetails, favAyahs, toggleSurah, toggleAyah } = useFavorites();
 
     const s = styles(colors);
 
     const sections = [
-        ...(favSurahs.length > 0
-            ? [{ title: 'Sourates favorites', data: favSurahs, type: 'surah' as const }]
+        ...(favSurahDetails.length > 0
+            ? [{ title: 'Sourates favorites', data: favSurahDetails, type: 'surah' as const }]
             : []),
         ...(favAyahs.length > 0
             ? [{ title: 'Versets favoris', data: favAyahs, type: 'ayah' as const }]
@@ -34,7 +34,7 @@ export default function FavoritesScreen() {
                 <Text style={s.emptyIcon}>⭐</Text>
                 <Text style={s.emptyText}>Aucun favori pour le moment</Text>
                 <Text style={s.emptySub}>
-                    Appuyez sur ⭐ dans une sourate ou un verset pour l'ajouter ici
+                    Appuyez sur le cœur ou ⭐ dans une sourate pour l'ajouter ici
                 </Text>
             </View>
 
@@ -45,30 +45,35 @@ export default function FavoritesScreen() {
         <SectionList
             style={s.container}
             contentContainerStyle={s.content}
-            sections={sections}
+            sections={sections as any}
             keyExtractor={(item, index) =>
-                typeof item === 'number' ? `surah-${item}` : `ayah-${index}`
+                (item as any).number ? `surah-${(item as any).number}` : `ayah-${index}`
             }
             renderSectionHeader={({ section }) => (
-                <Text style={s.sectionHeader}>{section.title}</Text>
+                <Text style={s.sectionHeader}>{(section as any).title}</Text>
             )}
             renderItem={({ item, section }) => {
-                if (section.type === 'surah') {
-                    const surahNum = item as number;
+                if ((section as any).type === 'surah') {
+                    const surah = item as any;
                     return (
                         <TouchableOpacity
                             style={s.surahRow}
-                            onPress={() => router.push(`/surah/${surahNum}`)}
+                            onPress={() => router.push(`/surah/${surah.number}`)}
                             activeOpacity={0.7}
                         >
                             <View style={s.numBadge}>
-                                <Text style={s.numText}>{surahNum}</Text>
+                                <Text style={s.numText}>{surah.number}</Text>
                             </View>
-                            <Text style={s.surahLabel}>Sourate n°{surahNum}</Text>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.surahLabel}>{surah.englishName}</Text>
+                                <Text style={[s.surahLabel, { fontSize: 13, color: colors.textMuted, marginTop: 2, fontFamily: 'Amiri' }]}>
+                                    {surah.name}
+                                </Text>
+                            </View>
 
                             <TouchableOpacity
                                 style={s.removeBtn}
-                                onPress={() => toggleSurah(surahNum)}
+                                onPress={() => toggleSurah(surah.number)}
                             >
                                 <Text style={s.removeTxt}>✕</Text>
                             </TouchableOpacity>
