@@ -19,9 +19,9 @@ export function getAyahAudioUrl(
  * Some sources offer full surah files
  */
 export function getSurahAudioUrl(surahNumber: number): string {
-    // Using AlQuran.cloud for full surah audio (Warsh – Hussary)
+    // Using AlQuran.cloud for full surah audio (Hafs - Alafasy)
     const surah = String(surahNumber).padStart(3, '0');
-    return `https://download.quranicaudio.com/quran/warsh_from_nafi_by_al-hussary/${surah}.mp3`;
+    return `https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/${surah}.mp3`;
 }
 
 /**

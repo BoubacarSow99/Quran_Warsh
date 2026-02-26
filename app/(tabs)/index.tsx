@@ -45,8 +45,8 @@ export default function HomeScreen() {
         <ScrollView style={s.container} contentContainerStyle={s.content}>
             {/* Header décoratif */}
             <View style={s.headerCard}>
-                <Text style={s.bismillah}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
-                <Text style={s.headerSub}>Récitation Warsh 'an Nafi'</Text>
+                <Text style={s.headerTitle}>al-Qur'an</Text>
+                <Text style={s.headerSub}>Récitation Hafs 'an Asim</Text>
             </View>
 
 
@@ -139,6 +139,14 @@ const styles = (colors: any, isDark: boolean) =>
             shadowOpacity: 0.2,
             shadowRadius: 8,
             elevation: 6,
+        },
+        headerTitle: {
+            color: '#FFFFFF',
+            fontSize: 32,
+            fontFamily: 'Amiri',
+            textAlign: 'center',
+            letterSpacing: 1,
+            fontWeight: 'bold',
         },
         bismillah: {
             color: '#FFFFFF',

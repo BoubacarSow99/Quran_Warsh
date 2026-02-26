@@ -13,7 +13,7 @@ interface ThemeContextValue {
 
 const defaults: AppSettings = {
     fontSize: 24,
-    defaultReciterId: 'hussary_warsh',
+    defaultReciterId: 'alafasy',
     darkMode: false,
     autoDownload: false,
 };

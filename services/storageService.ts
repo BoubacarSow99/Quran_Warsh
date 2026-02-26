@@ -31,7 +31,7 @@ export interface AppSettings {
 
 const DEFAULT_SETTINGS: AppSettings = {
     fontSize: 24,
-    defaultReciterId: 'hussary_warsh',
+    defaultReciterId: 'alafasy',
     darkMode: false,
     autoDownload: false,
 };

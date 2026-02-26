@@ -4,7 +4,7 @@ import { AppSettings, getSettings, saveSettings } from '../services/storageServi
 export function useSettings() {
     const [settings, setSettings] = useState<AppSettings>({
         fontSize: 24,
-        defaultReciterId: 'hussary_warsh',
+        defaultReciterId: 'alafasy',
         darkMode: false,
         autoDownload: false,
     });

@@ -12,6 +12,8 @@ import {
     Inter_700Bold
 } from '@expo-google-fonts/inter';
 import { ThemeProvider, useTheme } from '../hooks/useTheme';
+import { PlayerProvider } from '../hooks/usePlayer';
+import { AudioPlayer } from '../components/AudioPlayer';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -38,25 +40,28 @@ function RootLayoutNav() {
     return (
         <>
             <StatusBar style={isDark ? 'light' : 'dark'} />
-            <Stack
-                screenOptions={{
-                    headerStyle: { backgroundColor: colors.headerBg },
-                    headerTintColor: colors.headerText,
-                    headerTitleStyle: { fontFamily: 'AmiriBold', fontSize: 20 },
-                    contentStyle: { backgroundColor: colors.background },
-                    animation: 'slide_from_right',
-                }}
-            >
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                    name="surah/[id]"
-                    options={{
-                        title: 'Le Saint Coran',
-                        headerBackTitle: 'Retour',
+            <PlayerProvider>
+                <Stack
+                    screenOptions={{
+                        headerStyle: { backgroundColor: colors.headerBg },
+                        headerTintColor: colors.headerText,
+                        headerTitleStyle: { fontFamily: 'AmiriBold', fontSize: 20 },
+                        contentStyle: { backgroundColor: colors.background },
+                        animation: 'slide_from_right',
                     }}
-                />
+                >
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen
+                        name="surah/[id]"
+                        options={{
+                            title: 'Le Saint Coran',
+                            headerBackTitle: 'Retour',
+                        }}
+                    />
 
-            </Stack>
+                </Stack>
+                <AudioPlayer />
+            </PlayerProvider>
         </>
     );
 }

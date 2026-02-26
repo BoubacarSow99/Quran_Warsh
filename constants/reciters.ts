@@ -8,28 +8,28 @@ export interface Reciter {
 
 export const RECITERS: Reciter[] = [
     {
-        id: 'hussary_warsh',
-        name: 'Mahmoud Khalil Al-Hussary (Warsh)',
-        nameAr: 'محمود خليل الحصري (ورش)',
-        baseUrl: 'https://www.islamicnetwork.com/audio/recitations/Warsh',
+        id: 'alafasy',
+        name: 'Mishary Rashid Alafasy',
+        nameAr: 'مشاري راشد العفاسي',
+        baseUrl: 'https://everyayah.com/data/Alafasy_128kbps',
         format: 'mp3',
     },
     {
-        id: 'yassin_jazaery',
-        name: 'Sheikh Yassin Al-Jazaery',
-        nameAr: 'ياسين الجزائري',
-        baseUrl: 'https://everyayah.com/data/Warsh_Qaloon_by_Hussary_128kbps',
+        id: 'husary',
+        name: 'Mahmoud Khalil Al-Hussary',
+        nameAr: 'محمود خليل الحصري',
+        baseUrl: 'https://everyayah.com/data/Husary_128kbps',
         format: 'mp3',
     },
     {
-        id: 'dossary_warsh',
-        name: 'Ibrahim Ad-Dossary (Warsh)',
-        nameAr: 'إبراهيم الدوسري (ورش)',
-        baseUrl: 'https://everyayah.com/data/warsh/dossary',
+        id: 'abdul_basit',
+        name: 'Abdul Basit (Murattal)',
+        nameAr: 'عبد الباسط عبد الصمد (مرتل)',
+        baseUrl: 'https://everyayah.com/data/Abdul_Basit_Murattal_192kbps',
         format: 'mp3',
     },
 ];
 
-// Primary Warsh audio source (EveryAyah style URL building)
+// Primary Hafs audio source (EveryAyah style URL building)
 // URL pattern: {baseUrl}/{surah3digit}{ayah3digit}.mp3
-export const PRIMARY_AUDIO_BASE = 'https://everyayah.com/data/Warsh_Qaloon_by_Hussary_128kbps';
+export const PRIMARY_AUDIO_BASE = 'https://everyayah.com/data/Alafasy_128kbps';

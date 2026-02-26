@@ -33,9 +33,9 @@ export interface SurahDetail {
 }
 
 const BASE_URL = 'https://api.alquran.cloud/v1';
-// Warsh 'an Nafi' edition identifier on AlQuran.cloud
-const WARSH_EDITION = 'quran-warsh-hafs';
-// Fallback to standard arabic text (Hafs) if Warsh edition has issues
+// Standard Hafs Uthmani edition identifier on AlQuran.cloud
+const HAFS_EDITION = 'quran-uthmani';
+// Fallback to standard arabic text if Uthmani edition has issues
 const ARABIC_EDITION = 'quran-simple-clean';
 
 async function apiFetch<T>(endpoint: string): Promise<T> {
@@ -62,9 +62,9 @@ export async function getSurahList(): Promise<Surah[]> {
  */
 export async function getSurah(surahNumber: number): Promise<SurahDetail> {
     try {
-        return await apiFetch<SurahDetail>(`/surah/${surahNumber}/${WARSH_EDITION}`);
+        return await apiFetch<SurahDetail>(`/surah/${surahNumber}/${HAFS_EDITION}`);
     } catch {
-        // Fallback to standard Arabic if Warsh edition unavailable
+        // Fallback to standard Arabic if Uthmani edition unavailable
         return apiFetch<SurahDetail>(`/surah/${surahNumber}/${ARABIC_EDITION}`);
     }
 }
@@ -73,7 +73,7 @@ export async function getSurah(surahNumber: number): Promise<SurahDetail> {
  * Get a specific ayah
  */
 export async function getAyah(surahNumber: number, ayahNumber: number): Promise<Ayah> {
-    const data = await apiFetch<Ayah>(`/ayah/${surahNumber}:${ayahNumber}/${ARABIC_EDITION}`);
+    const data = await apiFetch<Ayah>(`/ayah/${surahNumber}:${ayahNumber}/${HAFS_EDITION}`);
     return data;
 }
 

@@ -114,7 +114,7 @@ export default function SettingsScreen() {
 
 
             {/* Version */}
-            <Text style={s.version}>Quran Warsh v1.0.0 · Récitation Warsh 'an Nafi'</Text>
+            <Text style={s.version}>Quran Hafs v1.0.0 · Récitation Hafs 'an Asim</Text>
 
         </ScrollView>
     );
