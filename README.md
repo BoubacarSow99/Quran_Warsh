@@ -25,37 +25,41 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 
 ### 🎧 Écoute Audio
 - [x] Écoute de la sourate entière en Hafs
-- [x] Choix de plusieurs récitateurs (Sheikh Al-Hosary, Abd Al-Basit, etc.)
-- [x] Lecture verset par verset avec **auto-avance automatique**
+- [x] Choix de plusieurs récitateurs (Sheikh Al-Alafasy, Al-Hussary, Abd Al-Basit, etc.)
+- [x] Lecture verset par verset avec **auto-avance automatique** et **enchaînement inter-sourates transparent (Gapless)**
 - [x] Commandes audio : Lecture / Pause, Verset précédent / Suivant, Boucle de répétition
 - [x] Lecture de la **Basmala audio** avant chaque sourate (sauf Al-Fatiha et At-Tawbah)
-- [x] **Mise en cache locale** complète de la sourate avant la lecture (zéro interruption réseau)
-- [x] Barre de téléchargement progressive (affichage du pourcentage)
+- [x] **Mise en cache locale** intelligente et hors-ligne complet (vérification instantanée via système de fichiers)
+- [x] Gestionnaire de téléchargement complet en arrière-plan (mode Pause/Reprise) avec suivi du poids (en Mo)
 - [x] Lecteur audio global persistant (visible sur toute l'application)
-- [x] Défilement automatique vers le verset en cours (**Auto-Scroll**)
-- [x] Migration vers `expo-audio` (compatible Expo SDK 54)
+- [x] Défilement automatique multi-sourates vers le verset en cours (**Auto-Scroll absolu**)
+- [x] Migration vers l'API moderne `expo-audio` (compatible Expo SDK 54)
 
-### ⭐ Favoris
+### ⭐ Favoris & Reprise
+- [x] Sauvegarde automatique de la dernière position de lecture (Reprise depuis l'Accueil)
 - [x] Marquer / démarquer une sourate en favori (icône cœur dans la liste)
 - [x] Marquer / démarquer un verset en favori
 - [x] Onglet dédié aux favoris avec affichage nom FR + AR
-- [x] Synchronisation temps réel entre les onglets (`useFocusEffect`)
+- [x] Synchronisation temps réel entre les onglets
 - [x] Indicateur visuel ⭐ sur les versets favoris dans la lecture
 
 ### 🔍 Recherche
 - [x] Onglet de liste complète des 114 sourates avec numéro, nom arabe et nombre de versets
 
-### ⚙️ Paramètres
-- [x] Sélection du récitateur par défaut
+### ⚙️ Paramètres & Gestion des données
+- [x] Sélection manuelle du récitateur par défaut
 - [x] Changement de thème (clair / sombre)
+- [x] Gérer le téléchargement automatique des sourates (Bouton Pause/Lancement)
+- [x] **Zone de danger** : Réinitialisation complète du cache vocal et de l'historique avec redémarrage natif automatique de l'application
 - [x] Section **À propos** avec description de l'app et crédits du développeur
 
 ### 🎨 Design & UX
-- [x] Thème épuré avec couleurs douces (vert/beige)
-- [x] Navigation par onglets : Accueil, Sourates, Favoris, Paramètres
-- [x] Nouvelle icône et splash screen "Al-Qur'an Hafs"
-- [x] Police arabique **Amiri** pour le texte coranique
-- [x] Barre audio premium foncée (`#1c1c1e`) avec contrôles complets
+- [x] Thème épuré avec couleurs douces (vert/beige/marron)
+- [x] Navigation par onglets fluide : Accueil, Sourates, Favoris, Paramètres
+- [x] Icône de lancement et Splash Screen "Al-Qur'an Hafs" harmonisés
+- [x] Police arabique **Amiri** avec mode "Mushaf" continu
+- [x] Barre audio premium flottante avec contrôles complets
+- [x] **Rendu différé (Deferred Rendering)** : Ouverture immédiate sans aucun "freeze" pour les sourates géantes (ex: Al-Baqara)
 
 ---
 
@@ -65,8 +69,6 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 - [ ] Affichage par **Juz'** (30 parties)
 - [ ] Affichage par **Hizb**
 - [ ] Taille de police ajustable (zoom du texte)
-- [ ] Téléchargement audio automatique/manuel par l'utilisateur
-- [ ] Reprise automatique à la dernière lecture
 
 ### Fonctionnalités Secondaires
 - [ ] Système de recherche avancée (par nom de sourate, numéro, numéro de verset)
@@ -86,14 +88,14 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 
 | Section | Avancement |
 |---|---|
-| Lecture du Coran | 🟢 85% |
-| Écoute Audio | 🟢 90% |
-| Favoris | 🟢 95% |
-| Recherche | 🟡 40% |
-| Mode Hors Ligne | 🟡 50% (audio seulement) |
-| Paramètres | 🟢 80% |
-| Design / UX | 🟢 85% |
-| **Global MVP** | **🟢 ~80%** |
+| Lecture du Coran | 🟢 95% |
+| Écoute Audio | 🟢 95% |
+| Favoris & Reprise | 🟢 100% |
+| Recherche | 🟡 60% |
+| Mode Hors Ligne | 🟢 90% (audio et cache intelligent) |
+| Paramètres | 🟢 95% |
+| Design / UX | 🟢 90% |
+| **Global MVP** | **🟢 ~90%** |
 
 ---
 

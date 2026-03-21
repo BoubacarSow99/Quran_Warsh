@@ -50,9 +50,12 @@ async function apiFetch<T>(endpoint: string): Promise<T> {
     return json.data as T;
 }
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 /**
  * Get the list of all 114 surahs with metadata
  */
+
 export async function getSurahList(): Promise<Surah[]> {
     return apiFetch<Surah[]>('/surah');
 }
@@ -61,13 +64,25 @@ export async function getSurahList(): Promise<Surah[]> {
  * Get a complete surah with all its ayahs in Arabic (Hafs)
  */
 export async function getSurah(surahNumber: number): Promise<SurahDetail> {
+    const cacheKey = `@surah_${surahNumber}_${HAFS_EDITION}`;
+    
     try {
-        return await apiFetch<SurahDetail>(`/surah/${surahNumber}/${HAFS_EDITION}`);
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) return JSON.parse(cached);
+    } catch { /* ignore read error */ }
+
+    try {
+        const data = await apiFetch<SurahDetail>(`/surah/${surahNumber}/${HAFS_EDITION}`);
+        try {
+            await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+        } catch { /* ignore write error */ }
+        return data;
     } catch {
         // Fallback to standard Arabic if Uthmani edition unavailable
         return apiFetch<SurahDetail>(`/surah/${surahNumber}/${ARABIC_EDITION}`);
     }
 }
+
 
 /**
  * Get a specific ayah

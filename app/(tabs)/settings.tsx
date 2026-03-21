@@ -6,15 +6,79 @@ import {
     ScrollView,
     Switch,
     TouchableOpacity,
+    Alert,
 } from 'react-native';
 // Slider removed due to network dependency issues
 
 import { useTheme } from '../../hooks/useTheme';
 import { RECITERS } from '../../constants/reciters';
+import { useBatchDownload } from '../../hooks/useBatchDownload';
+import { usePlayer } from '../../hooks/usePlayer';
+import { clearAudioCache } from '../../services/audioCacheService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
+import { NativeModules } from 'react-native';
 
 export default function SettingsScreen() {
     const { colors, isDark, settings, updateSettings } = useTheme();
+    const activeReciterUrl = RECITERS.find(r => r.id === settings.defaultReciterId)?.baseUrl || RECITERS[0].baseUrl;
+    
+    const { stats, startDownload, stopDownload, refreshStats } = useBatchDownload(activeReciterUrl);
+    const player = usePlayer();
     const s = styles(colors);
+
+    // Calculate progress fraction
+    const progress = stats.total > 0 ? stats.completed / stats.total : 0;
+    const remaining = stats.total - stats.completed;
+
+    const handleClearData = () => {
+        Alert.alert(
+            "Zone de danger",
+            "Êtes-vous sûr de vouloir effacer toutes les données ? (Ceci effacera vos favoris, votre progression, vos réglages, et supprimera tout l'audio téléchargé pour libérer de l'espace). Cette action est irréversible.",
+            [
+                { text: "Annuler", style: "cancel" },
+                {
+                    text: "Effacer tout",
+                    style: "destructive",
+                    onPress: async () => {
+                        stopDownload();
+                        await player.stop();
+                        await clearAudioCache();
+                        await AsyncStorage.clear();
+
+                        // Restaure un état par défaut pour éviter un crash
+                        updateSettings({
+                            fontSize: 24,
+                            defaultReciterId: 'alafasy',
+                            darkMode: false,
+                            autoDownload: false,
+                        });
+
+                        refreshStats();
+
+                        Alert.alert(
+                            "Succès",
+                            "Toutes les données ont été effacées avec succès. L'application va maintenant redémarrer.",
+                            [{ 
+                                text: "OK", 
+                                onPress: async () => {
+                                    if (__DEV__ && NativeModules.DevSettings) {
+                                        NativeModules.DevSettings.reload();
+                                    } else {
+                                        try {
+                                            await Updates.reloadAsync();
+                                        } catch (e) {
+                                            console.warn("Redémarrage manuel requis");
+                                        }
+                                    }
+                                } 
+                            }]
+                        );
+                    }
+                }
+            ]
+        );
+    };
 
     return (
         <ScrollView style={s.container} contentContainerStyle={s.content}>
@@ -97,19 +161,83 @@ export default function SettingsScreen() {
 
             {/* Téléchargement */}
             <View style={s.section}>
-                <Text style={s.sectionTitle}>Téléchargement</Text>
+                <Text style={s.sectionTitle}>Téléchargement Complet</Text>
                 <View style={s.row}>
-                    <View>
-                        <Text style={s.label}>Téléchargement auto</Text>
-                        <Text style={s.sublabel}>Audio des sourates</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={s.label}>Téléchargement automatique</Text>
+                        <Text style={s.sublabel}>Toutes les sourates (Audio)</Text>
                     </View>
                     <Switch
-                        value={settings.autoDownload}
-                        onValueChange={val => updateSettings({ autoDownload: val })}
+                        value={stats.isDownloading || stats.completed === 114}
+                        disabled={!stats.isSupported || stats.completed === 114}
+                        onValueChange={() => {
+                            if (stats.isDownloading) {
+                                stopDownload();
+                            } else if (stats.isSupported) {
+                                startDownload();
+                            }
+                        }}
                         trackColor={{ false: colors.border, true: colors.primary }}
-                        thumbColor={settings.autoDownload ? colors.secondary : '#f4f3f4'}
+                        thumbColor={(stats.isDownloading || stats.completed === 114) ? colors.secondary : '#f4f3f4'}
                     />
                 </View>
+
+                {!stats.isSupported && (
+                    <View style={{ marginTop: 12 }}>
+                        <Text style={[s.sublabel, { color: '#e74c3c' }]}>
+                            Note : Le téléchargement audio n'est pas supporté sur navigateur web.
+                            Veuillez utiliser l'application mobile pour cette fonctionnalité.
+                        </Text>
+                    </View>
+                )}
+
+                {(stats.isDownloading || stats.completed > 0) && (
+                    <View style={s.progressContainer}>
+                        <View style={s.progressInfo}>
+                            <Text style={s.progressText}>
+                                {stats.completed === stats.total
+                                    ? 'Terminé'
+                                    : stats.isDownloading
+                                        ? `Téléchargement : ${stats.currentSurah || '...'} (${stats.currentSurahMB} Mo)`
+                                        : `En pause (Reprise sur ${stats.currentSurah || '...'})`}
+                            </Text>
+                            <Text style={s.progressStats}>
+                                {stats.completed} / {stats.total}
+                            </Text>
+                        </View>
+
+                        <View style={s.progressBarTrack}>
+                            <View style={[s.progressBarFill, { width: `${progress * 100}%` }]} />
+                        </View>
+
+                        <View style={s.metaRow}>
+                            <Text style={s.metaLabel}>Restant : {remaining} sourates</Text>
+                            <Text style={s.metaLabel}>Taille : {stats.sizeMB} Mo</Text>
+                        </View>
+                    </View>
+                )}
+
+                {!stats.isDownloading && stats.completed === 0 && (
+                    <Text style={[s.sublabel, { marginTop: 12, fontStyle: 'italic' }]}>
+                        Note : Le téléchargement se fait dans l'ordre 1, 114, 113... 2.
+                    </Text>
+                )}
+            </View>
+
+
+            {/* Zone de danger */}
+            <View style={[s.section, { borderColor: '#e74c3c' + '66' }]}>
+                <Text style={[s.sectionTitle, { color: '#e74c3c' }]}>Zone de danger</Text>
+                <Text style={s.sublabel}>
+                    Cette action supprimera toutes vos données locales de l'application (téléchargements audio, favoris, progression en cours, paramètres).
+                </Text>
+                <TouchableOpacity
+                    style={[s.fontBtn, { width: 'auto', paddingHorizontal: 20, height: 48, borderRadius: 12, backgroundColor: '#e74c3c', marginTop: 16 }]}
+                    onPress={handleClearData}
+                    activeOpacity={0.7}
+                >
+                    <Text style={[s.fontBtnText, { fontSize: 16, marginTop: 0 }]}>Effacer toutes les données</Text>
+                </TouchableOpacity>
             </View>
 
 
@@ -131,7 +259,7 @@ export default function SettingsScreen() {
 
 
             {/* Version */}
-            <Text style={s.version}>Quran Hafs v1.0.0 · Récitation Hafs 'an Asim</Text>
+            <Text style={s.version}>Quran Hafs v1.1 · Récitation Hafs 'an Asim</Text>
 
         </ScrollView>
     );
@@ -260,4 +388,35 @@ const styles = (colors: any) =>
             marginTop: 8,
         },
         primaryText: { color: colors.primary },
+
+        // Progress Bar Styles
+        progressContainer: { marginTop: 20 },
+        progressInfo: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            marginBottom: 8,
+        },
+        progressText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+        progressStats: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+        progressBarTrack: {
+            height: 8,
+            backgroundColor: colors.primary + '15',
+            borderRadius: 4,
+            overflow: 'hidden',
+        },
+        progressBarFill: {
+            height: '100%',
+            backgroundColor: colors.primary,
+        },
+        metaRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 10,
+        },
+        metaLabel: {
+            color: colors.textMuted,
+            fontSize: 11,
+            fontWeight: '500',
+        },
     });

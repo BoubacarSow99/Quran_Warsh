@@ -15,7 +15,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.alquranhafs.app"
+      "bundleIdentifier": "com.alquranhafs.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "NSMicrophoneUsageDescription": "L'application utilise le micro pour la récitation."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +28,13 @@
       },
       "package": "com.alquranhafs.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -32,10 +42,23 @@
     },
     "plugins": [
       "expo-router",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Permettre à Al-Quran Hafs d'accéder au microphone.",
+          "enableBackgroundAudio": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d8914f57-ebfa-4131-a827-0f71029d0d81"
+      }
+    },
+    "owner": "artemis99"
   }
 }

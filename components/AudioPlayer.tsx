@@ -25,8 +25,12 @@ export function AudioPlayer() {
             pause();
         } else {
             // If we have a sound object (it was already playing but paused), resume
-            // If no sound object yet, start from the beginning (Bismillah + Download)
-            play(state.currentSurahNumber!, 0);
+            // If no sound object yet, start from currentAyahIndex
+            if (state.position > 0 || state.duration > 0) {
+                resume();
+            } else {
+                play(state.currentSurahNumber!, state.currentAyahIndex);
+            }
         }
     };
 

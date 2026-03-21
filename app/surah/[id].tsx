@@ -1,12 +1,12 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ActivityIndicator,
     ScrollView,
-    TouchableOpacity,
-    Share,
+    NativeSyntheticEvent,
+    NativeScrollEvent,
 } from 'react-native';
 
 import { useLocalSearchParams, useNavigation } from 'expo-router';
@@ -16,124 +16,410 @@ import { getSurah, SurahDetail, Ayah } from '../../services/quranApi';
 import { saveLastRead } from '../../services/storageService';
 import { usePlayer } from '../../hooks/usePlayer';
 import { useFavorites } from '../../hooks/useFavorites';
-import { RECITERS, PRIMARY_AUDIO_BASE } from '../../constants/reciters';
+import { RECITERS } from '../../constants/reciters';
+
+// ─── Ornament helpers ──────────────────────────────────────────────────
+const ORNAMENT = '❧';
+const ORNAMENT_LINE = `${ORNAMENT}  ───────  ${ORNAMENT}`;
+
+// ─── SurahBlock component ──────────────────────────────────────────────
+interface SurahBlockProps {
+    surah: SurahDetail;
+    settings: any;
+    colors: any;
+    player: any;
+    isAyahFav: (s: number, a: number) => boolean;
+    toggleAyah: (info: any) => void;
+    onBismillahLayout: (surahNum: number, y: number) => void;
+    onAyahLayout: (surahNum: number, index: number, y: number) => void;
+    onBlockLayout: (surah: SurahDetail, y: number) => void;
+    resumedAyahIndex?: number | null;
+}
 
 
-export default function SurahScreen() {
-    const { id } = useLocalSearchParams();
-    const { colors, settings } = useTheme();
-    const navigation = useNavigation();
 
-    const { isAyahFav, toggleAyah } = useFavorites();
-    const [surah, setSurah] = useState<SurahDetail | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const player = usePlayer();
-    const insets = useSafeAreaInsets();
-    const listRef = useRef<ScrollView>(null);
-    const [ayahLayouts, setAyahLayouts] = useState<{ [key: number]: number }>({});
-    const bismillahLayout = useRef<number>(0);
+function SurahBlock({
+    surah,
+    settings,
+    colors,
+    player,
+    isAyahFav,
+    toggleAyah,
+    onBismillahLayout,
+    onAyahLayout,
+    onBlockLayout,
+    resumedAyahIndex,
+}: SurahBlockProps) {
+    const s = blockStyles(colors);
+    const isCurrentSurah = player.state.currentSurahNumber === surah.number;
 
-    // Sync audio player reciter URL with selected settings
+    // Deferred rendering to prevent UI thread locks on large surahs like Surah 2
+    const initialLimit = resumedAyahIndex ? Math.max(50, resumedAyahIndex + 10) : 50;
+    const [renderLimit, setRenderLimit] = useState(() => 
+        surah.ayahs.length > initialLimit ? initialLimit : surah.ayahs.length
+    );
+
     useEffect(() => {
-        if (!settings.defaultReciterId) return;
-        const selectedReciter = RECITERS.find(r => r.id === settings.defaultReciterId);
-        if (selectedReciter && player.state.reciterBaseUrl !== selectedReciter.baseUrl) {
-            player.setReciter(selectedReciter.baseUrl);
+        if (renderLimit < surah.ayahs.length) {
+            // Delay rendering the rest of the surah until after screen transition ~350ms
+            const timer = setTimeout(() => {
+                setRenderLimit(surah.ayahs.length);
+            }, 350);
+            return () => clearTimeout(timer);
         }
-    }, [settings.defaultReciterId, player.state.reciterBaseUrl]);
+    }, [renderLimit, surah.ayahs.length]);
 
-    useEffect(() => {
-        if (!id) return;
-        const surahId = parseInt(id as string);
-
-        // Show the bar IMMEDIATELY on entry
-        player.initializeSurah(surahId, []);
-
-        getSurah(surahId)
-            .then(data => {
-                setSurah(data);
-                player.initializeSurah(data.number, data.ayahs);
-                navigation.setOptions({
-                    headerTitle: `${data.englishName} - ${data.name}`,
-                    headerStyle: { backgroundColor: colors.mushafHeader || '#7D1C1C' },
-                    headerTintColor: '#FFFFFF',
-                });
-
-                setLoading(false);
-
-
-                // Save last read
-                saveLastRead({
-                    surahNumber: data.number,
-                    surahName: data.name,
-                    ayahNumber: 1,
-                    timestamp: Date.now(),
-                });
-            })
-            .catch(err => {
-                console.error(err);
-                setError('Impossible de charger la sourate.');
-                setLoading(false);
-            });
-
-        return () => {
-            // Stop the player when leaving the surah screen to ensure the audio bar disappears.
-            player.stop();
-        };
-    }, [id, colors.mushafHeader, navigation]);
-
-    // Sync scroll with audio player
-    // Sync scroll with audio player
-    useEffect(() => {
-        if (player.state.currentAyahIndex !== undefined && listRef.current) {
-            if (player.state.isBismillahPlaying) {
-                listRef.current.scrollTo({ y: bismillahLayout.current, animated: true });
-            } else {
-                const yPos = ayahLayouts[player.state.currentAyahIndex];
-                if (yPos !== undefined) {
-                    listRef.current.scrollTo({ y: yPos - 100, animated: true });
-                }
-            }
-        }
-    }, [player.state.currentAyahIndex, player.state.isBismillahPlaying, ayahLayouts]);
-
-    const onShare = async (ayah: Ayah) => {
-        try {
-            await Share.share({
-                message: `${ayah.text} [${surah?.name} - ${ayah.numberInSurah}]`,
-            });
-        } catch (error) {
-            console.error(error);
-        }
-    };
+    const visibleAyahs = surah.ayahs.slice(0, renderLimit);
 
     const handleAyahPress = (index: number) => {
-        if (player.state.currentSurahNumber === surah!.number && player.state.currentAyahIndex === index) {
+        const ayah = surah.ayahs[index];
+        if (ayah) {
+            saveLastRead({
+                surahNumber: surah.number,
+                surahName: surah.name,
+                ayahNumber: ayah.numberInSurah,
+                type: 'reading',
+            });
+        }
+
+        if (isCurrentSurah && player.state.currentAyahIndex === index) {
             if (player.state.isPlaying) {
                 player.pause();
             } else {
                 player.resume();
             }
         } else {
-            player.play(surah!.number, index, surah!.ayahs);
+            player.play(surah.number, index, surah.ayahs);
         }
     };
 
-    const s = styles(colors);
+    return (
+        <View style={s.surahBlock} onLayout={(e) => onBlockLayout(surah, e.nativeEvent.layout.y)}>
+            {/* ── Surah Name Banner ── */}
 
-    if (loading) {
+            <View style={s.banner}>
+                <View style={s.bannerInner}>
+                    <Text style={s.ornamentLeft}>{ORNAMENT}</Text>
+                    <Text style={s.bannerName}>{surah.name}</Text>
+                    <Text style={s.ornamentRight}>{ORNAMENT}</Text>
+                </View>
+                <Text style={s.bannerSub}>
+                    {surah.revelationType === 'Meccan' ? 'مكية' : 'مدنية'} ·{' '}
+                    {surah.ayahs.length} آية
+                </Text>
+            </View>
+
+            {/* ── Bismillah ── */}
+            {surah.number !== 1 && surah.number !== 9 && (
+                <View
+                    onLayout={(e) => onBismillahLayout(surah.number, e.nativeEvent.layout.y)}
+                    style={[
+                        s.bismillahContainer,
+                        isCurrentSurah &&
+                            player.state.isBismillahPlaying &&
+                            { backgroundColor: colors.primary + '22' },
+                    ]}
+                >
+                    <Text style={s.bismillah}>
+                        بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+                    </Text>
+                </View>
+            )}
+
+            {/* ── Ayahs ── */}
+            <Text
+                style={[
+                    s.ayahsText,
+                    { fontSize: settings.fontSize, lineHeight: settings.fontSize * 2.0 },
+                ]}
+            >
+                {visibleAyahs.map((item, index) => {
+                    let displayedText = item.text;
+                    if (surah.number !== 1 && surah.number !== 9 && index === 0) {
+                        // Find the end of the Bismillah by locating the root رحيم
+                        // (last word of Bismillah). This works regardless of diacritics/Unicode variant.
+                        const rahimIdx = displayedText.search(/ر[\u064E\u064F\u0650\u0651\u0652]*ح[\u064E\u064F\u0650\u0651\u0652]*ي[\u064E\u064F\u0650\u0651\u0652]*م[\u064E\u064F\u0650\u0651\u0652\u0640]*/u);
+                        if (rahimIdx !== -1) {
+                            // advance past "رحيم" (≈4–8 chars with diacritics) and any trailing space
+                            const afterRahim = displayedText.indexOf(' ', rahimIdx + 4);
+                            if (afterRahim !== -1) {
+                                displayedText = displayedText.slice(afterRahim).trimStart();
+                            }
+                        }
+                    }
+                    const isPlayingHighlight =
+                        isCurrentSurah &&
+                        player.state.currentAyahIndex === index &&
+                        player.state.isPlaying &&
+                        !player.state.isBismillahPlaying;
+
+                    const isResumeHighlight = isCurrentSurah && resumedAyahIndex === index;
+                    const isHighlighted = isPlayingHighlight || isResumeHighlight;
+
+                    return (
+                        <Text
+                            key={`${surah.number}-${index}`}
+                            onPress={() => handleAyahPress(index)}
+                            onLongPress={() =>
+                                toggleAyah({
+                                    surahNumber: surah.number,
+                                    surahName: surah.name,
+                                    ayahNumber: item.numberInSurah,
+                                    ayahText: item.text,
+                                })
+                            }
+                            style={[
+                                isHighlighted && {
+                                    color: colors.primary,
+                                    backgroundColor: colors.primary + '22',
+                                },
+                            ]}
+                        >
+                            {displayedText}
+                            {' '}
+                            <Text style={s.ayahMarker}>
+                                {isAyahFav(surah.number, item.numberInSurah) ? '⭐' : ''}
+                                {'﴿'}
+                                {item.numberInSurah}
+                                {'﴾'}
+                            </Text>
+                            {/* invisible layout anchor */}
+                            <View
+                                onLayout={(e) =>
+                                    onAyahLayout(surah.number, index, e.nativeEvent.layout.y)
+                                }
+                                style={{ width: 0, height: 0 }}
+                            />
+                            {' '}
+                        </Text>
+                    );
+                })}
+            </Text>
+
+            {/* ── Bottom ornament divider ── */}
+            <Text style={s.dividerLine}>{ORNAMENT_LINE}</Text>
+        </View>
+    );
+}
+
+// ─── Main Screen ───────────────────────────────────────────────────────
+export default function SurahScreen() {
+    const { id, ayah } = useLocalSearchParams();
+    const { colors, settings } = useTheme();
+    const navigation = useNavigation();
+    const { isAyahFav, toggleAyah } = useFavorites();
+    const player = usePlayer();
+    const insets = useSafeAreaInsets();
+
+    const startId = parseInt(id as string);
+    const startAyah = ayah ? parseInt(ayah as string) : undefined;
+
+    const [surahs, setSurahs] = useState<SurahDetail[]>([]);
+    const [loadingInitial, setLoadingInitial] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [resumedAyahIndex, setResumedAyahIndex] = useState<number | null>(startAyah ? startAyah - 1 : null);
+    const nextIdRef = useRef(startId);
+    const isLoadingRef = useRef(false);
+
+    const scrollRef = useRef<ScrollView>(null);
+
+    // Layout trackers
+    const ayahLayoutsRef = useRef<{ [surahNum: number]: { [idx: number]: number } }>({});
+    const bismillahLayoutsRef = useRef<{ [surahNum: number]: number }>({});
+    
+    // Header sync
+    const surahYPositionsRef = useRef<{ id: number; english: string; name: string; y: number }[]>([]);
+    const activeHeaderRef = useRef('');
+
+    // Sync reciter
+    useEffect(() => {
+        if (!settings.defaultReciterId) return;
+        const selectedReciter = RECITERS.find((r) => r.id === settings.defaultReciterId);
+        if (selectedReciter && player.state.reciterBaseUrl !== selectedReciter.baseUrl) {
+            player.setReciter(selectedReciter.baseUrl);
+        }
+    }, [settings.defaultReciterId, player.state.reciterBaseUrl]);
+
+    // Load a batch of surahs starting from `fromId`
+    const loadSurah = useCallback(
+        async (surahId: number, isFirst: boolean) => {
+            if (surahId > 114) return;
+            if (isLoadingRef.current) return;
+            
+            isLoadingRef.current = true;
+            if (isFirst) setLoadingInitial(true);
+            else setLoadingMore(true);
+
+            try {
+                const data = await getSurah(surahId);
+                setSurahs((prev) => {
+                    if (prev.some(s => s.number === data.number)) return prev;
+                    return [...prev, data];
+                });
+                nextIdRef.current = surahId + 1;
+
+                if (isFirst) {
+                    player.initializeSurah(data.number, data.ayahs, startAyah ? startAyah - 1 : 0);
+                    navigation.setOptions({
+                        headerTitle: `${data.englishName} · ${data.name}`,
+                        headerStyle: { backgroundColor: '#5C2D07' },
+                        headerTintColor: '#F5E6C8',
+                    });
+                    saveLastRead({
+                        surahNumber: data.number,
+                        surahName: data.name,
+                        ayahNumber: 1,
+                        type: 'reading',
+                    });
+                    setLoadingInitial(false);
+                }
+            } catch (err) {
+                console.error(err);
+                if (isFirst) setError('Impossible de charger la sourate.');
+                setLoadingInitial(false);
+            } finally {
+                setLoadingMore(false);
+                isLoadingRef.current = false;
+            }
+        },
+        [navigation, player]
+    );
+
+    useEffect(() => {
+        loadSurah(startId, true);
+        return () => {
+            player.stop();
+        };
+    }, [startId]);
+
+    // Scroll-to-end → load next surah and sync header
+    const handleScroll = useCallback(
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+            const offsetY = contentOffset.y;
+
+            // 1. Sync header
+            if (surahYPositionsRef.current.length > 0) {
+                let active = surahYPositionsRef.current[0];
+                for (const item of surahYPositionsRef.current) {
+                    if (item.y - 150 <= offsetY) {
+                        active = item;
+                    } else {
+                        break;
+                    }
+                }
+                if (active && activeHeaderRef.current !== active.english) {
+                    activeHeaderRef.current = active.english;
+                    navigation.setOptions({
+                        headerTitle: `${active.english} · ${active.name}`,
+                    });
+                }
+            }
+
+            // 2. Infinite scroll
+            const distanceFromBottom =
+                contentSize.height - (offsetY + layoutMeasurement.height);
+            if (distanceFromBottom < 400 && !loadingMore && nextIdRef.current <= 114) {
+                loadSurah(nextIdRef.current, false);
+            }
+        },
+        [loadingMore, loadSurah, navigation]
+    );
+
+    // If player advances to a surah not yet loaded in view, forcefully pull it
+    useEffect(() => {
+        const playingSurahNum = player.state.currentSurahNumber;
+        if (playingSurahNum && playingSurahNum >= nextIdRef.current && !loadingMore) {
+            loadSurah(nextIdRef.current, false);
+        }
+    }, [player.state.currentSurahNumber, loadingMore, loadSurah]);
+
+    // Auto-scroll when player changes currentAyah
+    useEffect(() => {
+        const surahNum = player.state.currentSurahNumber;
+        const idx = player.state.currentAyahIndex;
+        if (surahNum === null || idx === undefined || !scrollRef.current) return;
+
+        let attempt = 0;
+        const tryScroll = () => {
+            let y;
+            if (player.state.isBismillahPlaying) {
+                y = bismillahLayoutsRef.current[surahNum];
+            } else {
+                y = ayahLayoutsRef.current[surahNum]?.[idx];
+            }
+
+            const blockY = surahYPositionsRef.current.find(s => s.id === surahNum)?.y;
+
+            if (y !== undefined && blockY !== undefined) {
+                const absoluteY = blockY + y;
+                scrollRef.current?.scrollTo({ y: Math.max(0, absoluteY - 120), animated: true });
+            } else if (attempt < 15) {
+                // Element not laid out yet (infinite scroll or deferred rendering pending), try again
+                attempt++;
+                setTimeout(tryScroll, 300);
+            }
+        };
+
+        tryScroll();
+    }, [player.state.currentSurahNumber, player.state.currentAyahIndex, player.state.isBismillahPlaying]);
+
+    // Clear resumed highlight on play
+    useEffect(() => {
+        if (player.state.isPlaying) {
+            setResumedAyahIndex(null);
+        }
+    }, [player.state.isPlaying]);
+
+    // Auto-scroll to resumed ayah on load
+    useEffect(() => {
+        if (!loadingInitial && resumedAyahIndex !== null && scrollRef.current) {
+            setTimeout(() => {
+                const y = ayahLayoutsRef.current[startId]?.[resumedAyahIndex];
+                if (y !== undefined && scrollRef.current) {
+                    scrollRef.current.scrollTo({ y: y - 120, animated: true });
+                }
+            }, 600);
+        }
+    }, [loadingInitial, resumedAyahIndex, startId]);
+
+    const onBismillahLayout = useCallback((surahNum: number, y: number) => {
+        bismillahLayoutsRef.current[surahNum] = y;
+    }, []);
+
+    const onAyahLayout = useCallback((surahNum: number, index: number, y: number) => {
+        if (!ayahLayoutsRef.current[surahNum]) ayahLayoutsRef.current[surahNum] = {};
+        ayahLayoutsRef.current[surahNum][index] = y;
+    }, []);
+
+    const onBlockLayout = useCallback((surah: SurahDetail, y: number) => {
+        const existing = surahYPositionsRef.current.find(s => s.id === surah.number);
+        if (existing) {
+            existing.y = y;
+        } else {
+            surahYPositionsRef.current.push({ id: surah.number, english: surah.englishName, name: surah.name, y });
+        }
+        surahYPositionsRef.current.sort((a, b) => a.y - b.y);
+    }, []);
+
+    const s = screenStyles(colors);
+
+    if (loadingInitial) {
         return (
-            <View style={[s.container, { justifyContent: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.primary} />
+            <View style={[s.centered]}>
+                <ActivityIndicator size="large" color="#B8882A" />
+                <Text style={s.loadingText}>جارٍ التحميل...</Text>
             </View>
         );
     }
 
-    if (error || !surah) {
+    if (error) {
         return (
-            <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: colors.text }}>{error || 'Une erreur est survenue'}</Text>
+            <View style={s.centered}>
+                <Text style={{ color: colors.text, textAlign: 'center', padding: 24 }}>
+                    {error}
+                </Text>
             </View>
         );
     }
@@ -141,184 +427,218 @@ export default function SurahScreen() {
     return (
         <View style={s.container}>
             <ScrollView
-                ref={listRef as any}
-                contentContainerStyle={[s.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+                ref={scrollRef}
+                onScroll={handleScroll}
+                scrollEventThrottle={200}
+                contentContainerStyle={[s.scroll, { paddingBottom: 120 + insets.bottom }]}
                 showsVerticalScrollIndicator={false}
             >
-                <View style={s.mushafFrame}>
-                    <View style={s.mushafInnerFrame}>
-                        <View style={s.header}>
-                            <View style={s.headerRow}>
-                                <Text style={s.headerName}>{surah.englishName}</Text>
-                                <Text style={s.headerNameDivider}> - </Text>
-                                <Text style={s.headerNameAr}>{surah.name}</Text>
-                            </View>
-                            <Text style={s.headerInfo}>
-                                {surah.revelationType === 'Meccan' ? 'Mecquoise' : 'Médinoise'} · {surah.ayahs.length} versets
-                            </Text>
-                        </View>
+                {/* ── Outer parchment frame ── */}
+                <View style={s.outerFrame}>
+                    <View style={s.innerFrame}>
+                        {surahs.map((surah) => (
+                            <SurahBlock
+                                key={surah.number}
+                                surah={surah}
+                                settings={settings}
+                                colors={colors}
+                                player={player}
+                                isAyahFav={isAyahFav}
+                                toggleAyah={toggleAyah}
+                                onBismillahLayout={onBismillahLayout}
+                                onAyahLayout={onAyahLayout}
+                                onBlockLayout={onBlockLayout}
+                                resumedAyahIndex={surah.number === startId ? resumedAyahIndex : null}
+                            />
+                        ))}
 
-                        {surah.number !== 1 && surah.number !== 9 && (
-                            <View
-                                onLayout={(e) => { bismillahLayout.current = e.nativeEvent.layout.y }}
-                                style={[
-                                    s.bismillahContainer,
-                                    player.state.isBismillahPlaying && s.highlightedBismillah
-                                ]}
-                            >
-                                <Text style={[
-                                    s.bismillah,
-                                    player.state.isBismillahPlaying && { color: colors.primary }
-                                ]}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
+
+                        {/* Load-more spinner */}
+                        {loadingMore && (
+                            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color="#B8882A" />
+                                <Text style={{ color: '#B8882A', fontFamily: 'Amiri', marginTop: 6 }}>
+                                    جارٍ تحميل السورة التالية...
+                                </Text>
                             </View>
                         )}
 
-                        <Text style={[s.mushafText, { fontSize: settings.fontSize, lineHeight: settings.fontSize * 1.8 }]}>
-                            {surah.ayahs.map((item, index) => {
-                                let displayedText = item.text;
-                                if (surah.number !== 1 && surah.number !== 9 && index === 0) {
-                                    displayedText = displayedText.replace(/^بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ\s*/, '');
-                                }
-                                return (
-                                    <Text
-                                        key={index}
-                                        onPress={() => handleAyahPress(index)}
-                                        onLongPress={() => {
-                                            toggleAyah({
-                                                surahNumber: surah.number,
-                                                surahName: surah.name,
-                                                ayahNumber: item.numberInSurah,
-                                                ayahText: item.text
-                                            });
-                                        }}
-                                        style={[
-                                            player.state.currentAyahIndex === index &&
-                                            player.state.isPlaying &&
-                                            !player.state.isBismillahPlaying &&
-                                            s.highlightedAyah
-                                        ]}
-                                    >
-                                        {displayedText}{' '}
-                                        <Text style={s.ayahMarker}>
-                                            ﴿{isAyahFav(surah.number, item.numberInSurah) ? '⭐ ' : ''}{item.numberInSurah}﴾{' '}
-                                        </Text>
-                                        <View
-                                            onLayout={(e) => {
-                                                const y = e.nativeEvent.layout.y;
-                                                setAyahLayouts(prev => ({ ...prev, [index]: y }));
-                                            }}
-                                            style={{ width: 0, height: 0 }}
-                                        />
-                                    </Text>
-                                );
-                            })}
-                        </Text>
+                        {nextIdRef.current > 114 && (
+                            <Text style={s.endText}>
+                                ❧  خَتَمَ اللهُ لَنَا بِالخَيْرِ  ❧
+                            </Text>
+                        )}
                     </View>
                 </View>
-
             </ScrollView>
+
+            {/* Fullscreen Download Overlay */}
+            {player.state.downloadProgress > 0 && player.state.downloadProgress < 1 && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color="#B8882A" />
+                    <Text style={{ color: '#fff', fontSize: 20, marginTop: 20, fontFamily: 'Amiri' }}>
+                        جاري التحميل...
+                    </Text>
+                    <Text style={{ color: '#B8882A', fontSize: 32, marginTop: 10, fontWeight: 'bold' }}>
+                        {Math.round(player.state.downloadProgress * 100)}%
+                    </Text>
+                    <Text style={{ color: '#aaa', fontSize: 13, marginTop: 24, textAlign: 'center', paddingHorizontal: 40, fontFamily: 'Inter', lineHeight: 20 }}>
+                        La sourate est en cours de téléchargement complet pour une écoute hors-ligne fluide et ininterrompue.
+                        {"\n\n"}Ce processus se terminera rapidement et continuera même si vous minimisez l'application.
+                    </Text>
+                </View>
+            )}
         </View>
     );
 }
 
-const styles = (colors: any) =>
+// ─── Styles ────────────────────────────────────────────────────────────
+
+const PARCHMENT = '#FBF5E6';
+const GOLD = '#B8882A';
+const GOLD_LIGHT = '#D4A847';
+const DARK_BROWN = '#5C2D07';
+const BORDER_COLOR = '#C8A96E';
+
+const screenStyles = (colors: any) =>
     StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: colors.background,
+            backgroundColor: colors.background ?? '#2A1500',
         },
-        scrollContent: {
-            padding: 12,
-            paddingBottom: 160,
+        scroll: {
+            padding: 8,
         },
-        ayahsContainer: {
-            // Container for all ayahs to manage layout correctly
-        },
-        ayahCtn: {
-            marginBottom: 8,
-            padding: 4,
+        outerFrame: {
+            backgroundColor: PARCHMENT,
             borderRadius: 6,
+            borderWidth: 3,
+            borderColor: BORDER_COLOR,
+            // shadow
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
         },
-        mushafFrame: {
-            backgroundColor: colors.mushafPaper || '#FBF9F1',
-            borderRadius: 8,
-            borderWidth: 2,
-            borderColor: '#E0D6BA',
-            margin: 4,
-            padding: 2,
+        innerFrame: {
+            margin: 6,
+            borderWidth: 1.5,
+            borderColor: BORDER_COLOR,
+            borderRadius: 4,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
         },
-        mushafInnerFrame: {
-            borderWidth: 1,
-            borderColor: '#E0D6BA',
-            borderStyle: 'dashed',
-            padding: 15,
-            minHeight: '100%',
-        },
-        header: {
+        centered: {
+            flex: 1,
+            justifyContent: 'center',
             alignItems: 'center',
-            paddingBottom: 20,
-            marginBottom: 20,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
+            backgroundColor: PARCHMENT,
         },
-        headerName: {
-            fontSize: 24,
-            fontFamily: 'Inter',
-            fontWeight: 'bold',
-            color: colors.primary,
-        },
-        headerNameDivider: {
-            fontSize: 20,
-            color: colors.textMuted,
-        },
-        headerNameAr: {
-            fontSize: 28,
+        loadingText: {
             fontFamily: 'Amiri',
-            color: colors.primary,
+            color: GOLD,
+            marginTop: 12,
+            fontSize: 18,
         },
-        headerRow: {
+        endText: {
+            fontFamily: 'Amiri',
+            color: GOLD,
+            textAlign: 'center',
+            fontSize: 20,
+            paddingVertical: 24,
+        },
+    });
+
+const blockStyles = (colors: any) =>
+    StyleSheet.create({
+        surahBlock: {
+            marginBottom: 8,
+        },
+
+        // ── Banner ──────────────────────────────────
+        banner: {
+            backgroundColor: DARK_BROWN,
+            borderRadius: 4,
+            borderWidth: 1.5,
+            borderColor: GOLD,
+            marginBottom: 16,
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            alignItems: 'center',
+            // inner gold inset shadow simulation
+            shadowColor: GOLD,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.4,
+            shadowRadius: 6,
+            elevation: 4,
+        },
+        bannerInner: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 10,
+            gap: 12,
         },
-        headerInfo: {
+        bannerName: {
+            fontFamily: 'Amiri',
+            fontSize: 26,
+            color: GOLD_LIGHT,
+            textAlign: 'center',
+            flex: 1,
+        },
+        ornamentLeft: {
+            color: GOLD_LIGHT,
+            fontSize: 20,
+        },
+        ornamentRight: {
+            color: GOLD_LIGHT,
+            fontSize: 20,
+        },
+        bannerSub: {
+            fontFamily: 'Amiri',
             fontSize: 14,
-            color: colors.textMuted,
-            fontFamily: 'Inter',
+            color: '#D4A847AA',
             marginTop: 4,
         },
+
+        // ── Bismillah ────────────────────────────────
         bismillahContainer: {
-            backgroundColor: colors.mushafHighlight || '#FDECEC',
-            paddingVertical: 10,
-            paddingHorizontal: 20,
-            borderRadius: 4,
             alignSelf: 'center',
-            marginBottom: 30,
+            marginBottom: 18,
+            paddingVertical: 6,
+            paddingHorizontal: 24,
+            borderRadius: 4,
+            borderWidth: 1,
+            borderColor: BORDER_COLOR,
+            backgroundColor: '#F5EDD0',
         },
         bismillah: {
-            fontSize: 26,
             fontFamily: 'Amiri',
-            color: colors.text,
+            fontSize: 24,
+            color: DARK_BROWN,
             textAlign: 'center',
         },
-        mushafText: {
+
+        // ── Ayahs ────────────────────────────────────
+        ayahsText: {
             fontFamily: 'Amiri',
-            color: colors.arabicText,
-            textAlign: 'center',
+            color: '#1A0A00',
+            textAlign: 'justify',
             writingDirection: 'rtl',
+            lineHeight: 48,
         },
         ayahMarker: {
             fontFamily: 'Amiri',
-            color: colors.primary,
-            fontWeight: 'normal',
+            color: GOLD,
+            fontSize: 18,
         },
-        highlightedAyah: {
-            backgroundColor: colors.primary + '22',
-            color: colors.primary,
-        },
-        highlightedBismillah: {
-            backgroundColor: colors.primary + '22',
-            borderColor: colors.primary,
-            borderWidth: 1,
+
+        // ── Divider ──────────────────────────────────
+        dividerLine: {
+            fontFamily: 'Amiri',
+            color: GOLD,
+            textAlign: 'center',
+            fontSize: 18,
+            marginVertical: 20,
+            letterSpacing: 4,
         },
     });
