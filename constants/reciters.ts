@@ -28,8 +28,50 @@ export const RECITERS: Reciter[] = [
         baseUrl: 'https://everyayah.com/data/Abdul_Basit_Murattal_192kbps',
         format: 'mp3',
     },
+    {
+        id: 'sudais',
+        name: 'Abdurrahman al-Sudais',
+        nameAr: 'عبد الرحمن السديس',
+        baseUrl: 'https://everyayah.com/data/Abdurrahmaan_As-Sudais_192kbps',
+        format: 'mp3',
+    },
+    {
+        id: 'shuraim',
+        name: 'Saud al-Shuraim',
+        nameAr: 'سعود الشريم',
+        baseUrl: 'https://everyayah.com/data/Saood_ash-Shuraym_128kbps',
+        format: 'mp3',
+    },
+    {
+        id: 'maher',
+        name: 'Maher al-Muaiqly',
+        nameAr: 'ماهر المعيقلي',
+        baseUrl: 'https://everyayah.com/data/MaherAlMuaiqly128kbps',
+        format: 'mp3',
+    },
+    {
+        id: 'shatri',
+        name: 'Abu Bakr al-Shatri',
+        nameAr: 'أبو بكر الشاطري',
+        baseUrl: 'https://everyayah.com/data/Abu_Bakr_Ash-Shaatree_128kbps',
+        format: 'mp3',
+    },
+    {
+        id: 'qatami',
+        name: 'Nasser al-Qatami',
+        nameAr: 'ناصر القطامي',
+        baseUrl: 'https://everyayah.com/data/Nasser_Alqatami_128kbps',
+        format: 'mp3',
+    },
+    {
+        id: 'minshawi',
+        name: 'Muhammad Siddiq al-Minshawi',
+        nameAr: 'محمد صديق المنشاوي (مرتل)',
+        baseUrl: 'https://everyayah.com/data/Minshawy_Murattal_128kbps',
+        format: 'mp3',
+    },
 ];
 
 // Primary Hafs audio source (EveryAyah style URL building)
 // URL pattern: {baseUrl}/{surah3digit}{ayah3digit}.mp3
-export const PRIMARY_AUDIO_BASE = 'https://everyayah.com/data/Alafasy_128kbps';
+export const PRIMARY_AUDIO_BASE = 'https://everyayah.com/data/Abdurrahmaan_As-Sudais_192kbps';

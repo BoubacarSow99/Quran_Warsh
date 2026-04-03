@@ -11,7 +11,7 @@ export interface AppSettings {
 const SETTINGS_KEY = 'app_settings_v1';
 const SETTINGS_DEFAULTS: AppSettings = {
     fontSize: 24,
-    defaultReciterId: 'alafasy',
+    defaultReciterId: 'sudais',
     darkMode: false,
     autoDownload: false,
 };

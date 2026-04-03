@@ -19,6 +19,10 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 - [x] Affichage par sourate
 - [x] Mode nuit / mode jour (thème automatique selon le système)
 - [x] Affichage des numéros de versets discrets
+- [x] Interface **Mushaf Traditionnel** : Cadres ornés multiples, bannières de sourates, fond parchemin immersif
+- [x] Surlignage des **Noms Divins (Allah)** en rouge dans le texte
+- [x] Typographie Arabe avancée : Suppression des artefacts de balisage et gestion des jonctions de lettres parfaites
+- [x] Marqueurs de fin de versets orientaux `۝` avec chiffres arabes natifs (١, ٢, ٣...)
 - [x] Mise en page en flux continu façon **Mushaf** (texte qui s'enchaîne naturellement)
 - [x] Suppression automatique de la Basmala dupliquée dans le premier verset
 - [x] Surlignage dynamique du verset en cours de lecture
@@ -75,11 +79,10 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 - [ ] Suggestions automatiques dans la recherche
 
 ### Évolutions Futures
-- [ ] Tajwid coloré
+- [ ] Tajwid coloré complet (actuellement restreint aux Noms Divins)
 - [ ] Mode répétition pour mémorisation (répétition du verset N fois)
 - [ ] Minuteur de lecture (sleep timer)
 - [ ] Widgets mobiles (Android/iOS)
-- [ ] Mode hors ligne complet (texte pré-chargé sans internet)
 - [ ] Support de la plateforme **Web** (Next.js)
 
 ---
@@ -92,10 +95,10 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 | Écoute Audio | 🟢 95% |
 | Favoris & Reprise | 🟢 100% |
 | Recherche | 🟡 60% |
-| Mode Hors Ligne | 🟢 90% (audio et cache intelligent) |
+| Mode Hors Ligne | 🟢 100% (textes, traductions et audio) |
 | Paramètres | 🟢 95% |
-| Design / UX | 🟢 90% |
-| **Global MVP** | **🟢 ~90%** |
+| Design / UX | 🟢 100% |
+| **Global MVP** | **🟢 ~95%** |
 
 ---
 
@@ -105,11 +108,12 @@ L'application est conçue pour être sobre, rapide, et respectueuse du contenu r
 |---|---|
 | **React Native + Expo SDK 54** | Framework mobile |
 | **Expo Router** | Navigation par fichiers |
-| **expo-audio** | Lecture audio |
-| **expo-file-system** | Cache local audio |
-| **AlQuran.cloud API** | Texte et audio du Coran |
+| **expo-audio** | Lecture audio haute performance |
+| **expo-file-system** | Cache local audio et gestion des fichiers |
+| **AlQuran.cloud API** | Source du texte et de l'audio |
 | **TypeScript** | Typage statique |
-| **@expo-google-fonts/amiri** | Police arabique |
+| **@expo-google-fonts/amiri** | Police arabique premium |
+| **AsyncStorage** | Persistance des réglages et favoris |
 
 ---
 

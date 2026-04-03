@@ -1,25 +1,23 @@
-// Quran API Service – using AlQuran.cloud API with Hafs edition
-// Docs: https://alquran.cloud/api
+// Quran API Service – Local Bundled Edition (quran-tajweed)
 
 export interface Surah {
     number: number;
-    name: string;           // arabic
+    name: string;
     englishName: string;
     englishNameTranslation: string;
-    revelationType: string; // Meccan | Medinan
+    revelationType: string;
     numberOfAyahs: number;
 }
 
 export interface Ayah {
-    number: number;         // absolute ayah number (1-6236)
-    numberInSurah: number;  // ayah number within the surah
-    text: string;           // arabic text (Hafs)
+    number: number;
+    numberInSurah: number;
+    text: string;
     surah: {
         number: number;
         name: string;
     };
     juz: number;
-    hizb: number;
     hizbQuarter: number;
     page: number;
 }
@@ -32,64 +30,31 @@ export interface SurahDetail {
     ayahs: Ayah[];
 }
 
-const BASE_URL = 'https://api.alquran.cloud/v1';
-// Standard Hafs Uthmani edition identifier on AlQuran.cloud
-const HAFS_EDITION = 'quran-uthmani';
-// Fallback to standard arabic text if Uthmani edition has issues
-const ARABIC_EDITION = 'quran-simple-clean';
-
-async function apiFetch<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${BASE_URL}${endpoint}`);
-    if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-    const json = await response.json();
-    if (json.code !== 200) {
-        throw new Error(`API response error: ${json.status}`);
-    }
-    return json.data as T;
-}
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// @ts-ignore
+const quranData = require('../assets/data/quran.json');
 
 /**
  * Get the list of all 114 surahs with metadata
  */
-
 export async function getSurahList(): Promise<Surah[]> {
-    return apiFetch<Surah[]>('/surah');
+    return quranData.surahs;
 }
 
 /**
- * Get a complete surah with all its ayahs in Arabic (Hafs)
+ * Get a complete surah with all its ayahs
  */
 export async function getSurah(surahNumber: number): Promise<SurahDetail> {
-    const cacheKey = `@surah_${surahNumber}_${HAFS_EDITION}`;
-    
-    try {
-        const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) return JSON.parse(cached);
-    } catch { /* ignore read error */ }
-
-    try {
-        const data = await apiFetch<SurahDetail>(`/surah/${surahNumber}/${HAFS_EDITION}`);
-        try {
-            await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch { /* ignore write error */ }
-        return data;
-    } catch {
-        // Fallback to standard Arabic if Uthmani edition unavailable
-        return apiFetch<SurahDetail>(`/surah/${surahNumber}/${ARABIC_EDITION}`);
-    }
+    return quranData.surahDetails[surahNumber.toString()];
 }
-
 
 /**
  * Get a specific ayah
  */
 export async function getAyah(surahNumber: number, ayahNumber: number): Promise<Ayah> {
-    const data = await apiFetch<Ayah>(`/ayah/${surahNumber}:${ayahNumber}/${HAFS_EDITION}`);
-    return data;
+    const detail = quranData.surahDetails[surahNumber.toString()] as SurahDetail;
+    const ayah = detail.ayahs.find(a => a.numberInSurah === ayahNumber);
+    if (!ayah) throw new Error('Ayah not found');
+    return ayah;
 }
 
 /**
@@ -103,4 +68,13 @@ export function searchSurahs(surahs: Surah[], query: string): Surah[] {
         s.name.includes(q) ||
         s.number.toString() === q
     );
+}
+
+// Stubs to prevent breaking existing components during transition
+export async function checkTextCacheStatus() {
+    return { completed: 114, total: 114, isComplete: true };
+}
+
+export async function downloadAllTextData() {
+    return;
 }

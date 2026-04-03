@@ -36,9 +36,13 @@ export interface PlayerContextType {
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-    const playerRef = useRef<AudioPlayer | null>(null);
+    const player1Ref = useRef<AudioPlayer>(createAudioPlayer(null));
+    const player2Ref = useRef<AudioPlayer>(createAudioPlayer(null));
+    const activePlayerIdx = useRef<1 | 2>(1);
+    
     const ayahsRef = useRef<Ayah[]>([]);
     const isLoopingRef = useRef(false);
+    
     const [state, setState] = useState<PlayerState>({
         isPlaying: false,
         isLoading: false,
@@ -52,56 +56,61 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         downloadProgress: 0,
     });
 
-    // Stable reference to the player
-    if (!playerRef.current) {
-        playerRef.current = createAudioPlayer(null);
-    }
-    const player = playerRef.current;
+    const getActivePlayer = () => activePlayerIdx.current === 1 ? player1Ref.current : player2Ref.current;
+    const getInactivePlayer = () => activePlayerIdx.current === 1 ? player2Ref.current : player1Ref.current;
 
-    // To prevent stale closures in the audio listener, we keep a fresh reference to handleAutoAdvance
     const onDidJustFinishRef = useRef<() => void>(() => {});
-    
-    // Tracks if a URL was actually loaded into native Expo Audio
     const hasLoadedUrlRef = useRef(false);
 
-    // ── Audio session setup + background keepalive ──────────────────────
     useEffect(() => {
-        // Configure audio session for background playback
         const configureAudio = () =>
             setAudioModeAsync({
-                playsInSilentMode: true,       // play even when silent/ringer off (iOS)
-                shouldPlayInBackground: true,  // keep playing when app is minimised
-                interruptionMode: 'doNotMix',  // pause other apps' audio
+                playsInSilentMode: true,
+                shouldPlayInBackground: true,
+                interruptionMode: 'doNotMix',
             });
 
         configureAudio();
 
-        // Re-apply audio session when app comes back to foreground
-        // (iOS may reset the session after a phone call, etc.)
         const appStateSub = AppState.addEventListener('change', (next: AppStateStatus) => {
-            if (next === 'active') {
-                configureAudio();
-            }
+            if (next === 'active') configureAudio();
         });
 
-        const statusSub = player.addListener('playbackStatusUpdate', (status) => {
-            setState(prev => ({
-                ...prev,
-                isPlaying: status.playing,
-                duration: status.duration * 1000,
-                position: status.currentTime * 1000,
-                isLoading: status.isBuffering && !status.playing,
-            }));
+        // Combined listener for both players
+        const setupListener = (p: AudioPlayer, id: number) => {
+            return p.addListener('playbackStatusUpdate', (status) => {
+                // SAFETY: If an INACTIVE player is playing, stop it.
+                if (activePlayerIdx.current !== id && status.playing) {
+                    p.pause();
+                    return;
+                }
 
-            if (status.didJustFinish) {
-                onDidJustFinishRef.current();
-            }
-        });
+                // Only update global state if this is the ACTIVE player
+                if (activePlayerIdx.current === id) {
+                    setState(prev => ({
+                        ...prev,
+                        isPlaying: status.playing,
+                        duration: status.duration * 1000,
+                        position: status.currentTime * 1000,
+                        isLoading: status.isBuffering && !status.playing,
+                    }));
+
+                    if (status.didJustFinish) {
+                        onDidJustFinishRef.current();
+                    }
+                }
+            });
+        };
+
+        const sub1 = setupListener(player1Ref.current, 1);
+        const sub2 = setupListener(player2Ref.current, 2);
 
         return () => {
             appStateSub.remove();
-            statusSub.remove();
-            player.remove();
+            sub1.remove();
+            sub2.remove();
+            player1Ref.current.remove();
+            player2Ref.current.remove();
         };
     }, []);
 
@@ -110,6 +119,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const currentSurahRef = useRef<number | null>(null);
     const currentIndexRef = useRef(0);
     const isBismillahPlayingRef = useRef(false);
+
+    const preloadNext = useCallback(async (surahNumber: number, ayahIndex: number) => {
+        try {
+            const nextIdx = ayahIndex + 1;
+            if (nextIdx < ayahsRef.current.length) {
+                const url = await getCachedUri(surahNumber, ayahsRef.current[nextIdx].numberInSurah, state.reciterBaseUrl);
+                const p = getInactivePlayer();
+                p.pause(); // Safety: make sure it's not playing
+                p.replace(url);
+            }
+        } catch (e) {
+            console.error('Preload error:', e);
+        }
+    }, [state.reciterBaseUrl]);
 
     const loadAndPlayInner = useCallback(async (surahNumber: number, ayahIndex: number, skipBismillah: boolean = false) => {
         try {
@@ -130,7 +153,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             const ayah = ayahsRef.current[ayahIndex];
             if (!ayah) return;
 
-            // Save position for the "Resume" feature
             saveLastPosition({
                 surahNumber: surahNumber,
                 surahName: ayah.surah?.name || `Sourate ${surahNumber}`,
@@ -138,21 +160,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                 type: 'listening',
             });
 
-            // Fetch the right URL to play
             const url = playBismillah
                 ? await getCachedUri(1, 1, state.reciterBaseUrl)
                 : await getCachedUri(surahNumber, ayah.numberInSurah, state.reciterBaseUrl);
 
             hasLoadedUrlRef.current = true;
-            player.replace(url);
-            player.play();
+            const p = getActivePlayer();
+            p.replace(url);
+            p.play();
 
             setState(prev => ({ ...prev, isLoading: false }));
+
+            // PRELOAD the next one in the other player
+            if (!playBismillah) {
+                preloadNext(surahNumber, ayahIndex);
+            }
         } catch (error) {
             console.error('Audio load error:', error);
             setState(prev => ({ ...prev, isLoading: false, isPlaying: false }));
         }
-    }, [state.reciterBaseUrl]);
+    }, [state.reciterBaseUrl, preloadNext]);
 
     const play = useCallback(
         async (surahNumber: number, ayahIndex: number, newAyahs?: Ayah[]) => {
@@ -203,15 +230,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         if (!surahNumber) return;
 
-        // Gapless: No more setTimeouts. We swap as fast as possible.
         if (playBismillah) {
-            // Just finished Bismillah, now play the actual first verse
             loadAndPlayInner(surahNumber, ayahIndex, true);
         } else if (isLoopingRef.current) {
-            player.seekTo(0);
-            player.play();
+            const p = getActivePlayer();
+            p.seekTo(0);
+            p.play();
         } else if (ayahIndex < ayahsRef.current.length - 1) {
-            loadAndPlayInner(surahNumber, ayahIndex + 1, false);
+            // GAPLESS SWITCH
+            const oldPlayer = getActivePlayer();
+            oldPlayer.pause(); // Ensure old is silent
+            
+            activePlayerIdx.current = activePlayerIdx.current === 1 ? 2 : 1;
+            const p = getActivePlayer();
+            
+            p.play(); 
+            
+            currentIndexRef.current = ayahIndex + 1;
+            setState(prev => ({ ...prev, currentAyahIndex: ayahIndex + 1 }));
+
+            preloadNext(surahNumber, ayahIndex + 1);
         } else if (surahNumber < 114) {
              // Surah finished, auto continue to the next surah
              const nextSurahNum = surahNumber + 1;
@@ -243,14 +281,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }, [handleAutoAdvance]);
 
     const pause = useCallback(async () => {
-        player.pause();
+        getActivePlayer().pause();
     }, []);
 
     const resume = useCallback(async () => {
         if (!hasLoadedUrlRef.current && state.currentSurahNumber !== null) {
             play(state.currentSurahNumber, state.currentAyahIndex, ayahsRef.current);
         } else {
-            player.play();
+            getActivePlayer().play();
         }
     }, [state.currentSurahNumber, state.currentAyahIndex, play]);
 
@@ -276,7 +314,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const stop = useCallback(async () => {
-        player.pause();
+        player1Ref.current.pause();
+        player2Ref.current.pause();
         hasLoadedUrlRef.current = false;
         setState(prev => ({
             ...prev,

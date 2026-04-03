@@ -158,7 +158,6 @@ export default function SettingsScreen() {
                 ))}
             </View>
 
-
             {/* Téléchargement */}
             <View style={s.section}>
                 <Text style={s.sectionTitle}>Téléchargement Complet</Text>
@@ -379,6 +378,37 @@ const styles = (colors: any) =>
         reciterInfo: { flex: 1, alignItems: 'flex-start' },
         reciterAr: { color: colors.arabicText, fontSize: 16, fontFamily: 'Amiri' },
         reciterFr: { color: colors.text, fontSize: 14, fontFamily: 'Inter', fontWeight: '500' },
+
+        // Tajweed Mode Styles
+        modeContainer: {
+            marginTop: 10,
+            paddingLeft: 4,
+        },
+        modeButtons: {
+            flexDirection: 'row',
+            gap: 10,
+        },
+        modeBtn: {
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 20,
+            backgroundColor: colors.primary + '15',
+            borderWidth: 1,
+            borderColor: colors.primary + '33',
+        },
+        modeBtnActive: {
+            backgroundColor: colors.primary,
+            borderColor: colors.primary,
+        },
+        modeBtnText: {
+            fontSize: 13,
+            color: colors.text,
+            fontFamily: 'Inter',
+            fontWeight: '500',
+        },
+        modeBtnTextActive: {
+            color: '#FFFFFF',
+        },
 
         version: {
             color: colors.textMuted,

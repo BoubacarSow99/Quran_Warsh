@@ -13,7 +13,7 @@ interface ThemeContextValue {
 
 const defaults: AppSettings = {
     fontSize: 24,
-    defaultReciterId: 'alafasy',
+    defaultReciterId: 'sudais',
     darkMode: false,
     autoDownload: false,
 };

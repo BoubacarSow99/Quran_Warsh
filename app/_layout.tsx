@@ -54,8 +54,8 @@ function RootLayoutNav() {
                     <Stack.Screen
                         name="surah/[id]"
                         options={{
+                            headerShown: false,
                             title: 'Le Saint Coran',
-                            headerBackTitle: 'Retour',
                         }}
                     />
 
