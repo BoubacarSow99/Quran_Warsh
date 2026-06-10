@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEFAULT_RECITER_ID } from '../constants/reciters';
 
 // ── App Settings ──────────────────────────────────────────────────────────
 export interface AppSettings {
@@ -11,7 +12,7 @@ export interface AppSettings {
 const SETTINGS_KEY = 'app_settings_v1';
 const SETTINGS_DEFAULTS: AppSettings = {
     fontSize: 24,
-    defaultReciterId: 'sudais',
+    defaultReciterId: DEFAULT_RECITER_ID,
     darkMode: false,
     autoDownload: false,
 };

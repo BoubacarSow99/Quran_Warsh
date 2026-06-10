@@ -15,6 +15,7 @@ import { RECITERS } from '../../constants/reciters';
 import { useBatchDownload } from '../../hooks/useBatchDownload';
 import { usePlayer } from '../../hooks/usePlayer';
 import { clearAudioCache } from '../../services/audioCacheService';
+import { clearMergedCache } from '../../services/audioMergeService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import { NativeModules } from 'react-native';
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
                         stopDownload();
                         await player.stop();
                         await clearAudioCache();
+                        await clearMergedCache();
                         await AsyncStorage.clear();
 
                         // Restaure un état par défaut pour éviter un crash
@@ -131,6 +133,46 @@ export default function SettingsScreen() {
                 <Text style={s.fontSizeMeta}>Ajuster la taille du texte (18-40)</Text>
             </View>
 
+            {/* Minuteur de veille */}
+            <View style={s.section}>
+                <Text style={s.sectionTitle}>Minuteur de veille (Sleep Timer)</Text>
+                <View style={[s.modeButtons, { flexWrap: 'wrap' }]}>
+                    {[
+                        { label: 'Désactivé', value: null },
+                        { label: '15 min', value: 15 },
+                        { label: '30 min', value: 30 },
+                        { label: '45 min', value: 45 },
+                        { label: '1 h', value: 60 },
+                    ].map(option => {
+                        const isActive = player.state.sleepTimerDuration === option.value;
+                        return (
+                            <TouchableOpacity
+                                key={option.label}
+                                style={[
+                                    s.modeBtn,
+                                    isActive && s.modeBtnActive,
+                                ]}
+                                onPress={() => player.setSleepTimer(option.value)}
+                                activeOpacity={0.7}
+                            >
+                                <Text
+                                    style={[
+                                        s.modeBtnText,
+                                        isActive && s.modeBtnTextActive,
+                                    ]}
+                                >
+                                    {option.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+                <Text style={[s.sublabel, { marginTop: 12 }]}>
+                    {player.state.sleepTimerDuration
+                        ? `Le lecteur audio s'arrêtera automatiquement dans ${player.state.sleepTimerDuration} minutes.`
+                        : "Permet de couper automatiquement la lecture audio après la durée sélectionnée."}
+                </Text>
+            </View>
 
             {/* Récitateur */}
             <View style={s.section}>
@@ -163,23 +205,48 @@ export default function SettingsScreen() {
                 <Text style={s.sectionTitle}>Téléchargement Complet</Text>
                 <View style={s.row}>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.label}>Téléchargement automatique</Text>
-                        <Text style={s.sublabel}>Toutes les sourates (Audio)</Text>
+                        <Text style={s.label}>Télécharger tout le Coran</Text>
+                        <Text style={s.sublabel}>Rendre toutes les sourates disponibles hors-ligne (~600 Mo)</Text>
                     </View>
-                    <Switch
-                        value={stats.isDownloading || stats.completed === 114}
-                        disabled={!stats.isSupported || stats.completed === 114}
-                        onValueChange={() => {
-                            if (stats.isDownloading) {
-                                stopDownload();
-                            } else if (stats.isSupported) {
-                                startDownload();
-                            }
-                        }}
-                        trackColor={{ false: colors.border, true: colors.primary }}
-                        thumbColor={(stats.isDownloading || stats.completed === 114) ? colors.secondary : '#f4f3f4'}
-                    />
                 </View>
+
+                {stats.isSupported && !stats.isDownloading && stats.completed < stats.total && (
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: colors.primary,
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            marginTop: 12,
+                        }}
+                        onPress={startDownload}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter', fontWeight: 'bold' }}>
+                            ⬇ Télécharger {stats.completed > 0 ? 'la suite' : 'tout le Coran'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {stats.isSupported && stats.isDownloading && (
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: 'transparent',
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            marginTop: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                        }}
+                        onPress={stopDownload}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'Inter', fontWeight: 'bold' }}>
+                            ⏸ Mettre en pause
+                        </Text>
+                    </TouchableOpacity>
+                )}
 
                 {!stats.isSupported && (
                     <View style={{ marginTop: 12 }}>

@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native';
 import { Colors } from '../constants/colors';
 import type { AppSettings } from '../services/storageService';
 import { getSettings, saveSettings } from '../services/storageService';
+import { DEFAULT_RECITER_ID } from '../constants/reciters';
 
 interface ThemeContextValue {
     isDark: boolean;
@@ -13,7 +14,7 @@ interface ThemeContextValue {
 
 const defaults: AppSettings = {
     fontSize: 24,
-    defaultReciterId: 'sudais',
+    defaultReciterId: DEFAULT_RECITER_ID,
     darkMode: false,
     autoDownload: false,
 };

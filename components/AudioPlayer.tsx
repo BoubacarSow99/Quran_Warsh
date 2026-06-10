@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
@@ -8,14 +8,32 @@ import { usePlayer } from '../hooks/usePlayer';
 
 export function AudioPlayer() {
     const { colors, isDark } = useTheme();
-    const { state, play, pause, resume, next, previous, toggleLoop, stop } = usePlayer();
+    const { state, play, pause, resume, next, previous, toggleLoop, cycleRepeat, stop, setSleepTimer } = usePlayer();
     const pathname = usePathname();
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
+    const [timerLabel, setTimerLabel] = useState<string | null>(null);
+    useEffect(() => {
+        if (!state.sleepTimerEndsAt) {
+            setTimerLabel(null);
+            return;
+        }
+        const update = () => {
+            const remaining = Math.max(0, state.sleepTimerEndsAt! - Date.now());
+            const mins = Math.floor(remaining / 60000);
+            const secs = Math.floor((remaining % 60000) / 1000);
+            setTimerLabel(`${mins}:${secs.toString().padStart(2, '0')}`);
+        };
+        update();
+        const id = setInterval(update, 1000);
+        return () => clearInterval(id);
+    }, [state.sleepTimerEndsAt]);
+
     // The currentSurahNumber is set by initializeSurah in SurahScreen
     // and cleared by stop() when leaving. This is our source of truth for visibility.
     // However, to be extra safe as requested by the user, we also check the pathname.
+    // Must be placed after all hook calls to satisfy the Rules of Hooks.
     if (!pathname.includes('/surah/') || !state.currentSurahNumber) {
         return null;
     }
@@ -38,8 +56,18 @@ export function AudioPlayer() {
         router.push('/(tabs)/settings');
     };
 
+    const repeatLabel = state.repeatCount > 1 ? `×${state.repeatCount}` : null;
+    const isRepeatActive = state.repeatCount > 1;
+
     return (
-        <View style={[styles.container, { paddingBottom: insets.bottom + 8, height: 64 + insets.bottom }]}>
+        <View style={[styles.container, { paddingBottom: insets.bottom + 8, height: (timerLabel ? 88 : 64) + insets.bottom }]}>
+            {timerLabel && (
+                <TouchableOpacity onPress={() => setSleepTimer(null)} style={styles.timerBar} activeOpacity={0.7}>
+                    <Ionicons name="time" size={13} color="#C9A84C" />
+                    <Text style={styles.timerBarText}>Arrêt dans {timerLabel} · Annuler</Text>
+                </TouchableOpacity>
+            )}
+
             {/* Loading / Download Progress */}
             {state.isLoading && (
                 <View style={styles.loadingOverlay}>
@@ -78,13 +106,16 @@ export function AudioPlayer() {
                     <Ionicons name="play-skip-forward" size={24} color="#fff" />
                 </TouchableOpacity>
 
-                {/* Repeat Toggle */}
-                <TouchableOpacity onPress={toggleLoop} style={styles.iconButton}>
+                {/* Repeat N times (cycle: 1 → 2 → 3 → 5 → 1) */}
+                <TouchableOpacity onPress={cycleRepeat} style={styles.repeatBtn}>
                     <Ionicons
                         name="repeat"
-                        size={24}
-                        color={state.isLooping ? "#1DB954" : "#aaa"} // primary green or gray
+                        size={22}
+                        color={isRepeatActive ? '#C9A84C' : '#aaa'}
                     />
+                    {repeatLabel && (
+                        <Text style={styles.repeatLabel}>{repeatLabel}</Text>
+                    )}
                 </TouchableOpacity>
             </View>
         </View>
@@ -121,6 +152,19 @@ const styles = StyleSheet.create({
     iconButton: {
         padding: 10,
     },
+    repeatBtn: {
+        padding: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 40,
+    },
+    repeatLabel: {
+        color: '#C9A84C',
+        fontSize: 10,
+        fontWeight: '800',
+        fontFamily: 'Inter',
+        marginTop: 2,
+    },
     playPauseBtn: {
         width: 56,
         height: 56,
@@ -150,4 +194,22 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontFamily: 'InterBold',
     },
+    timerBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 6,
+        paddingBottom: 4,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#222',
+        marginBottom: 4,
+        gap: 6,
+    },
+    timerBarText: {
+        color: '#C9A84C',
+        fontSize: 11,
+        fontFamily: 'Inter',
+        fontWeight: '600',
+    },
 });
+

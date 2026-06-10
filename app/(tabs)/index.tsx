@@ -12,12 +12,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../hooks/useTheme';
 import { getLastRead, LastRead } from '../../services/storageService';
 import { useCallback } from 'react';
-
+import { renderColoredText } from '../../utils/textUtils';
+import { getSurah, getSurahList } from '../../services/quranApi';
 
 // ── Daily Verse helpers ─────────────────────────────────────────────────
 
 const VERSE_STORAGE_KEY = 'daily_verse_v1';
-const TOTAL_AYAHS = 6236;
 
 interface DailyVerse {
     text: string;
@@ -30,33 +30,43 @@ function todayISO(): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Seeded selection from offline list using the numeric day-of-year as seed */
-function getOfflineVerse(): DailyVerse {
-    const now = new Date();
-    const dayOfYear = Math.floor(
-        (now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000
-    );
-    const idx = dayOfYear % OFFLINE_VERSES.length;
-    return { ...OFFLINE_VERSES[idx], date: todayISO() };
-}
 
-async function fetchRandomVerse(): Promise<DailyVerse | null> {
-    try {
-        const ayahNum = Math.floor(Math.random() * TOTAL_AYAHS) + 1;
-        const res = await fetch(
-            `https://api.alquran.cloud/v1/ayah/${ayahNum}/quran-uthmani`
-        );
-        const json = await res.json();
-        if (json.code !== 200) return null;
-        const data = json.data;
-        return {
-            text: data.text,
-            ref: `${data.surah.englishName} (${data.surah.name}) – ${data.numberInSurah}`,
-            date: todayISO(),
-        };
-    } catch {
-        return null;
+/** Seeded selection from offline JSON */
+async function getOfflineRandomVerse(): Promise<DailyVerse> {
+    const now = new Date();
+    // Jours écoulés depuis une époque fixe
+    const dayIndex = Math.floor(
+        (now.getTime() - new Date(2024, 0, 1).getTime()) / 86400000
+    );
+
+    const TOTAL_AYAHS = 6236;
+    
+    // Le pas de 137 (premier avec 6236) garantit un cycle parfait :
+    // Chaque jour donne un nouveau verset, sans aucune répétition avant 6236 jours (~17 ans).
+    const absoluteAyahIndex = (Math.abs(dayIndex) * 137) % TOTAL_AYAHS;
+
+    const surahs = await getSurahList();
+    let accumulated = 0;
+    let targetSurahNum = 1;
+    let targetAyahInSurah = 1;
+
+    for (const s of surahs) {
+        if (accumulated + s.numberOfAyahs > absoluteAyahIndex) {
+            targetSurahNum = s.number;
+            targetAyahInSurah = absoluteAyahIndex - accumulated + 1;
+            break;
+        }
+        accumulated += s.numberOfAyahs;
     }
+
+    const surahDetail = await getSurah(targetSurahNum);
+    const ayah = surahDetail.ayahs[targetAyahInSurah - 1];
+
+    return {
+        text: ayah.text,
+        ref: `${surahDetail.englishName} (${surahDetail.name}) – ${ayah.numberInSurah}`,
+        date: todayISO(),
+    };
 }
 
 async function getDailyVerse(): Promise<DailyVerse> {
@@ -69,11 +79,10 @@ async function getDailyVerse(): Promise<DailyVerse> {
         }
     } catch { /* ignore parse error */ }
 
-    // 2. Try fetching a random verse from the network
-    const online = await fetchRandomVerse();
-    const verse = online ?? getOfflineVerse(); // fallback to offline list
+    // 2. Fetch a random verse locally
+    const verse = await getOfflineRandomVerse();
 
-    // 3. Persist (online or offline verse) for the rest of the day
+    // 3. Persist for the rest of the day
     await AsyncStorage.setItem(VERSE_STORAGE_KEY, JSON.stringify(verse));
     return verse;
 }
@@ -85,69 +94,6 @@ function msUntilMidnight(): number {
     midnight.setHours(24, 0, 0, 0);
     return midnight.getTime() - now.getTime();
 }
-
-// ── Offline Verse List (60 curated verses) ──────────────────────────────
-const OFFLINE_VERSES: Omit<DailyVerse, 'date'>[] = [
-    { text: 'إِنَّ مَعَ ٱلْعُسْرِ يُسْرًا', ref: 'Al-Sharh (الشرح) – 6' },
-    { text: 'فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا', ref: 'Al-Sharh (الشرح) – 5' },
-    { text: 'وَمَن يَتَّقِ ٱللَّهَ يَجْعَل لَّهُۥ مَخْرَجًا', ref: 'At-Talaq (الطلاق) – 2' },
-    { text: 'وَمَن يَتَوَكَّلْ عَلَى ٱللَّهِ فَهُوَ حَسْبُهُۥٓ', ref: 'At-Talaq (الطلاق) – 3' },
-    { text: 'رَبَّنَآ ءَاتِنَا فِى ٱلدُّنْيَا حَسَنَةً وَفِى ٱلْـَٔاخِرَةِ حَسَنَةً وَقِنَا عَذَابَ ٱلنَّارِ', ref: 'Al-Baqara (البقرة) – 201' },
-    { text: 'وَبَشِّرِ ٱلصَّٰبِرِينَ', ref: 'Al-Baqara (البقرة) – 155' },
-    { text: 'إِنَّ ٱللَّهَ مَعَ ٱلصَّٰبِرِينَ', ref: 'Al-Baqara (البقرة) – 153' },
-    { text: 'وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ', ref: 'Al-Baqara (البقرة) – 45' },
-    { text: 'إِنَّ ٱللَّهَ لَا يُضِيعُ أَجْرَ ٱلْمُحْسِنِينَ', ref: 'At-Tawba (التوبة) – 120' },
-    { text: 'قُلْ هُوَ ٱللَّهُ أَحَدٌ', ref: 'Al-Ikhlas (الإخلاص) – 1' },
-    { text: 'ٱللَّهُ ٱلصَّمَدُ', ref: 'Al-Ikhlas (الإخلاص) – 2' },
-    { text: 'لَمْ يَلِدْ وَلَمْ يُولَدْ', ref: 'Al-Ikhlas (الإخلاص) – 3' },
-    { text: 'وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدٌۢ', ref: 'Al-Ikhlas (الإخلاص) – 4' },
-    { text: 'إِنَّا لِلَّهِ وَإِنَّآ إِلَيْهِ رَٰجِعُونَ', ref: 'Al-Baqara (البقرة) – 156' },
-    { text: 'يَٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ', ref: 'Al-Baqara (البقرة) – 153' },
-    { text: 'رَبِّ زِدْنِى عِلْمًا', ref: 'Ta-Ha (طه) – 114' },
-    { text: 'حَسْبُنَا ٱللَّهُ وَنِعْمَ ٱلْوَكِيلُ', ref: 'Al-Imran (آل عمران) – 173' },
-    { text: 'وَعَسَىٰٓ أَن تَكْرَهُوا۟ شَيْـًٔا وَهُوَ خَيْرٌ لَّكُمْ', ref: 'Al-Baqara (البقرة) – 216' },
-    { text: 'فَٱذْكُرُونِىٓ أَذْكُرْكُمْ', ref: 'Al-Baqara (البقرة) – 152' },
-    { text: 'وَإِذَا سَأَلَكَ عِبَادِى عَنِّى فَإِنِّى قَرِيبٌ', ref: 'Al-Baqara (البقرة) – 186' },
-    { text: 'ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ', ref: 'Al-Baqara (البقرة) – 255' },
-    { text: 'لَا إِكْرَاهَ فِى ٱلدِّينِ', ref: 'Al-Baqara (البقرة) – 256' },
-    { text: 'إِنَّ ٱللَّهَ عَلَىٰ كُلِّ شَىْءٍ قَدِيرٌ', ref: 'Al-Baqara (البقرة) – 20' },
-    { text: 'وَهُوَ بِكُلِّ شَىْءٍ عَلِيمٌ', ref: 'Al-Baqara (البقرة) – 29' },
-    { text: 'رَبَّنَا لَا تُزِغْ قُلُوبَنَا بَعْدَ إِذْ هَدَيْتَنَا', ref: 'Al-Imran (آل عمران) – 8' },
-    { text: 'إِنَّ ٱللَّهَ لَا يُخْلِفُ ٱلْمِيعَادَ', ref: 'Al-Imran (آل عمران) – 9' },
-    { text: 'يُرِيدُ ٱللَّهُ بِكُمُ ٱلْيُسْرَ وَلَا يُرِيدُ بِكُمُ ٱلْعُسْرَ', ref: 'Al-Baqara (البقرة) – 185' },
-    { text: 'وَٱللَّهُ يُحِبُّ ٱلْمُحْسِنِينَ', ref: 'Al-Imran (آل عمران) – 134' },
-    { text: 'إِنَّ ٱللَّهَ يُحِبُّ ٱلتَّوَّٰبِينَ وَيُحِبُّ ٱلْمُتَطَهِّرِينَ', ref: 'Al-Baqara (البقرة) – 222' },
-    { text: 'فَإِنَّ ٱللَّهَ غَفُورٌ رَّحِيمٌ', ref: 'Al-Baqara (البقرة) – 173' },
-    { text: 'إِنَّ ٱلْأَبْرَارَ لَفِى نَعِيمٍ', ref: 'Al-Infitar (الإنفطار) – 13' },
-    { text: 'فَأَمَّا مَن أَعْطَىٰ وَٱتَّقَىٰ', ref: 'Al-Layl (الليل) – 5' },
-    { text: 'وَٱللَّيْلِ إِذَا يَغْشَىٰ', ref: 'Al-Layl (الليل) – 1' },
-    { text: 'وَٱلضُّحَىٰ', ref: 'Ad-Duha (الضحى) – 1' },
-    { text: 'وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ', ref: 'Ad-Duha (الضحى) – 5' },
-    { text: 'أَلَمْ يَجِدْكَ يَتِيمًا فَـَٔاوَىٰ', ref: 'Ad-Duha (الضحى) – 6' },
-    { text: 'فَأَمَّا ٱلْيَتِيمَ فَلَا تَقْهَرْ', ref: 'Ad-Duha (الضحى) – 9' },
-    { text: 'وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ', ref: 'Ad-Duha (الضحى) – 11' },
-    { text: 'أَلَمْ نَشْرَحْ لَكَ صَدْرَكَ', ref: 'Al-Sharh (الشرح) – 1' },
-    { text: 'وَرَفَعْنَا لَكَ ذِكْرَكَ', ref: 'Al-Sharh (الشرح) – 4' },
-    { text: 'إِنَّآ أَعْطَيْنَٰكَ ٱلْكَوْثَرَ', ref: 'Al-Kawthar (الكوثر) – 1' },
-    { text: 'فَصَلِّ لِرَبِّكَ وَٱنْحَرْ', ref: 'Al-Kawthar (الكوثر) – 2' },
-    { text: 'إِذَا جَآءَ نَصْرُ ٱللَّهِ وَٱلْفَتْحُ', ref: 'An-Nasr (النصر) – 1' },
-    { text: 'سُبْحَٰنَ رَبِّىَ ٱلْعَظِيمِ', ref: 'Al-Waqi\'a (الواقعة) – 96' },
-    { text: 'يَٰٓأَيُّهَا ٱلنَّاسُ ٱتَّقُوا۟ رَبَّكُمُ', ref: 'An-Nisa (النساء) – 1' },
-    { text: 'وَمَا تَوْفِيقِىٓ إِلَّا بِٱللَّهِ', ref: 'Hud (هود) – 88' },
-    { text: 'وَإِن تَعُدُّوا۟ نِعْمَةَ ٱللَّهِ لَا تُحْصُوهَآ', ref: 'Ibrahim (إبراهيم) – 34' },
-    { text: 'لَئِن شَكَرْتُمْ لَأَزِيدَنَّكُمْ', ref: 'Ibrahim (إبراهيم) – 7' },
-    { text: 'إِنَّ ٱلصَّلَوٰةَ تَنْهَىٰ عَنِ ٱلْفَحْشَآءِ وَٱلْمُنكَرِ', ref: 'Al-Ankabut (العنكبوت) – 45' },
-    { text: 'وَٱتَّقُوا۟ يَوْمًا تُرْجَعُونَ فِيهِ إِلَى ٱللَّهِ', ref: 'Al-Baqara (البقرة) – 281' },
-    { text: 'وَمَا خَلَقْتُ ٱلْجِنَّ وَٱلْإِنسَ إِلَّا لِيَعْبُدُونِ', ref: 'Adh-Dhariyat (الذاريات) – 56' },
-    { text: 'يَٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱتَّقُوا۟ ٱللَّهَ حَقَّ تُقَاتِهِ', ref: 'Al-Imran (آل عمران) – 102' },
-    { text: 'وَٱعْتَصِمُوا۟ بِحَبْلِ ٱللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا۟', ref: 'Al-Imran (آل عمران) – 103' },
-    { text: 'كُنتُمْ خَيْرَ أُمَّةٍ أُخْرِجَتْ لِلنَّاسِ', ref: 'Al-Imran (آل عمران) – 110' },
-    { text: 'وَلَا تَهِنُوا۟ وَلَا تَحْزَنُوا۟ وَأَنتُمُ ٱلْأَعْلَوْنَ', ref: 'Al-Imran (آل عمران) – 139' },
-    { text: 'فَٱصْبِرْ إِنَّ وَعْدَ ٱللَّهِ حَقٌّ', ref: 'Ar-Rum (الروم) – 60' },
-    { text: 'وَٱلْعَصْرِ ۝ إِنَّ ٱلْإِنسَٰنَ لَفِى خُسْرٍ', ref: 'Al-Asr (العصر) – 1-2' },
-    { text: 'وَٱللَّهُ خَيْرُ ٱلرَّٰزِقِينَ', ref: 'Al-Jumua (الجمعة) – 11' },
-    { text: 'إِنَّمَا يَخْشَى ٱللَّهَ مِنْ عِبَادِهِ ٱلْعُلَمَٰٓؤُا۟', ref: 'Fatir (فاطر) – 28' },
-];
 
 
 
@@ -218,7 +164,7 @@ export default function HomeScreen() {
                     <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
                 ) : dailyVerse ? (
                     <>
-                        <Text style={s.ayahText}>{dailyVerse.text}</Text>
+                        <Text style={s.ayahText}>{renderColoredText(dailyVerse.text)}</Text>
                         <Text style={s.ayahRef}>{dailyVerse.ref}</Text>
                     </>
                 ) : (

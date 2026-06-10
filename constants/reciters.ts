@@ -15,13 +15,6 @@ export const RECITERS: Reciter[] = [
         format: 'mp3',
     },
     {
-        id: 'husary',
-        name: 'Mahmoud Khalil Al-Hussary',
-        nameAr: 'محمود خليل الحصري',
-        baseUrl: 'https://everyayah.com/data/Husary_128kbps',
-        format: 'mp3',
-    },
-    {
         id: 'abdul_basit',
         name: 'Abdul Basit (Murattal)',
         nameAr: 'عبد الباسط عبد الصمد (مرتل)',
@@ -75,3 +68,9 @@ export const RECITERS: Reciter[] = [
 // Primary Hafs audio source (EveryAyah style URL building)
 // URL pattern: {baseUrl}/{surah3digit}{ayah3digit}.mp3
 export const PRIMARY_AUDIO_BASE = 'https://everyayah.com/data/Abdurrahmaan_As-Sudais_192kbps';
+
+/**
+ * Single source of truth for the default reciter ID across the whole app.
+ * Matches PRIMARY_AUDIO_BASE and the AppSettings default in storageService.
+ */
+export const DEFAULT_RECITER_ID = 'sudais';

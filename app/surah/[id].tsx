@@ -20,6 +20,7 @@ import { saveLastRead } from '../../services/storageService';
 import { usePlayer } from '../../hooks/usePlayer';
 import { useFavorites } from '../../hooks/useFavorites';
 import { RECITERS } from '../../constants/reciters';
+import { renderColoredText } from '../../utils/textUtils';
 
 // ─── Ornament helpers ──────────────────────────────────────────────────
 const ORNAMENT = '❁';
@@ -30,38 +31,7 @@ function toArabicNumerals(num: string | number): string {
     return num.toString().replace(/[0-9]/g, (w) => arabicNumbers[Number(w)]);
 }
 
-const ALLAH_WORDS = ['ٱللَّهُ', 'ٱللَّهَ', 'ٱللَّهِ', 'اللَّهُ', 'اللَّهَ', 'اللَّهِ', 'لِلَّهِ', 'اللَّهُمَّ', 'ٱللَّهۚ'];
-const ALLAH_REGEX = /(ٱللَّهُ|ٱللَّهَ|ٱللَّهِ|اللَّهُ|اللَّهَ|اللَّهِ|لِلَّهِ|اللَّهُمَّ|ٱللَّهۚ)/g;
 
-function renderColoredText(text: string): (string | React.ReactNode)[] {
-    if (!text) return [];
-
-    // All-in-one cleaner: strips tajweed markup AND removes Kashida (the traits _ artifacts)
-    const cleanText = (t: string): string => {
-        let last;
-        let stripped = t;
-        do {
-            last = stripped;
-            stripped = stripped.replace(/\[([^\[\]]+)\[([^\]]+)\]/g, '$2');
-        } while (stripped !== last);
-        return stripped.replace(/\u0640/g, ''); 
-    };
-
-    const cleaned = cleanText(text);
-    const parts = cleaned.split(ALLAH_REGEX);
-    
-    return parts.map((part, i) => {
-        if (ALLAH_WORDS.includes(part)) {
-            return (
-                <Text key={`allah-${i}`} style={{ color: '#9E2A2B', fontWeight: 'bold' }}>
-                    {part}
-                </Text>
-            );
-        }
-        // Return raw string to ensure perfect Arabic letter joining
-        return part;
-    });
-}
 
 // ─── SurahBlock component ──────────────────────────────────────────────
 interface SurahBlockProps {
@@ -71,8 +41,8 @@ interface SurahBlockProps {
     player: any;
     isAyahFav: (s: number, a: number) => boolean;
     toggleAyah: (info: any) => void;
-    onBismillahLayout: (surahNum: number, y: number) => void;
-    onAyahLayout: (surahNum: number, index: number, y: number) => void;
+    onBismillahRef: (surahNum: number, ref: View | null) => void;
+    onAyahRef: (surahNum: number, index: number, ref: View | null) => void;
     onBlockLayout: (surah: SurahDetail, y: number) => void;
     resumedAyahIndex?: number | null;
 }
@@ -86,8 +56,8 @@ function SurahBlock({
     player,
     isAyahFav,
     toggleAyah,
-    onBismillahLayout,
-    onAyahLayout,
+    onBismillahRef,
+    onAyahRef,
     onBlockLayout,
     resumedAyahIndex,
 }: SurahBlockProps) {
@@ -154,7 +124,7 @@ function SurahBlock({
             {/* ── Bismillah ── */}
             {surah.number !== 1 && surah.number !== 9 && (
                 <View
-                    onLayout={(e) => onBismillahLayout(surah.number, e.nativeEvent.layout.y)}
+                    ref={(r) => onBismillahRef(surah.number, r)}
                     style={[
                         s.bismillahContainer,
                         isCurrentSurah &&
@@ -169,11 +139,13 @@ function SurahBlock({
             )}
 
             {/* ── Ayahs ── */}
-            <Text
-                style={[
-                    s.ayahsText,
-                    { fontSize: settings.fontSize, lineHeight: settings.fontSize * 2.0 },
-                ]}
+            <View
+                style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    direction: 'rtl',
+                    width: '100%',
+                }}
             >
                 {visibleAyahs.map((item, index) => {
                     let displayedText = item.text;
@@ -196,8 +168,9 @@ function SurahBlock({
                     const isHighlighted = isPlayingHighlight || isResumeHighlight;
 
                     return (
-                        <Text
+                        <TouchableOpacity
                             key={`${surah.number}-${index}`}
+                            ref={(r) => onAyahRef(surah.number, index, r as any)}
                             onPress={() => handleAyahPress(index)}
                             onLongPress={() =>
                                 toggleAyah({
@@ -207,31 +180,38 @@ function SurahBlock({
                                     ayahText: item.text,
                                 })
                             }
+                            activeOpacity={0.75}
                             style={[
+                                { alignSelf: 'flex-start' },
                                 isHighlighted && {
-                                    color: colors.primary,
                                     backgroundColor: colors.primary + '22',
+                                    borderRadius: 4,
                                 },
                             ]}
                         >
-                            {renderColoredText(displayedText)}
-                            <Text style={s.ayahMarker}>
-                                {isAyahFav(surah.number, item.numberInSurah) ? ' ⭐ ' : ' '}
-                                {'\u06DD'}
-                                {toArabicNumerals(item.numberInSurah)}
+                            <Text
+                                style={[
+                                    s.ayahsText,
+                                    {
+                                        fontSize: settings.fontSize,
+                                        lineHeight: settings.fontSize * 2.0,
+                                        writingDirection: 'rtl',
+                                    },
+                                    isHighlighted && { color: colors.primary },
+                                ]}
+                            >
+                                {renderColoredText(displayedText)}
+                                <Text style={s.ayahMarker}>
+                                    {isAyahFav(surah.number, item.numberInSurah) ? ' ⭐ ' : ' '}
+                                    {'\u06DD'}
+                                    {toArabicNumerals(item.numberInSurah)}
+                                    {' '}
+                                </Text>
                             </Text>
-                            {/* invisible layout anchor */}
-                            <View
-                                onLayout={(e) =>
-                                    onAyahLayout(surah.number, index, e.nativeEvent.layout.y)
-                                }
-                                style={{ width: 0, height: 0 }}
-                            />
-                            {' '}
-                        </Text>
+                        </TouchableOpacity>
                     );
                 })}
-            </Text>
+            </View>
 
             {/* ── Bottom ornament divider ── */}
             <Text style={s.dividerLine}>{ORNAMENT_LINE}</Text>
@@ -258,16 +238,25 @@ export default function SurahScreen() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [resumedAyahIndex, setResumedAyahIndex] = useState<number | null>(startAyah ? startAyah - 1 : null);
+    
+    useEffect(() => {
+        if (startAyah !== undefined) {
+            setResumedAyahIndex(startAyah - 1);
+        } else {
+            setResumedAyahIndex(null);
+        }
+    }, [startAyah]);
+
     const nextIdRef = useRef(startId);
     const isLoadingRef = useRef(false);
 
     const scrollRef = useRef<ScrollView>(null);
 
-    // Layout trackers
-    const ayahLayoutsRef = useRef<{ [surahNum: number]: { [idx: number]: number } }>({});
-    const bismillahLayoutsRef = useRef<{ [surahNum: number]: number }>({});
+    // Refs to View nodes for accurate measureLayout-based scrolling
+    const ayahRefsRef = useRef<{ [surahNum: number]: { [idx: number]: View | null } }>({});
+    const bismillahRefsRef = useRef<{ [surahNum: number]: View | null }>({});
     
-    // Header sync
+    // Header sync (still uses onBlockLayout y for header text only)
     const surahYPositionsRef = useRef<{ id: number; english: string; name: string; y: number }[]>([]);
     const activeHeaderRef = useRef('');
 
@@ -350,12 +339,7 @@ export default function SurahScreen() {
                 }
             }
 
-            // 2. Infinite scroll
-            const distanceFromBottom =
-                contentSize.height - (offsetY + layoutMeasurement.height);
-            if (distanceFromBottom < 400 && !loadingMore && nextIdRef.current <= 114) {
-                loadSurah(nextIdRef.current, false);
-            }
+
         },
         [loadingMore, loadSurah, navigation]
     );
@@ -376,20 +360,29 @@ export default function SurahScreen() {
 
         let attempt = 0;
         const tryScroll = () => {
-            let y;
+            const scrollNode = scrollRef.current as any;
+            let targetRef: View | null = null;
+
             if (player.state.isBismillahPlaying) {
-                y = bismillahLayoutsRef.current[surahNum];
+                targetRef = bismillahRefsRef.current[surahNum] || null;
             } else {
-                y = ayahLayoutsRef.current[surahNum]?.[idx];
+                targetRef = ayahRefsRef.current[surahNum]?.[idx] || null;
             }
 
-            const blockY = surahYPositionsRef.current.find(s => s.id === surahNum)?.y;
-
-            if (y !== undefined && blockY !== undefined) {
-                const absoluteY = blockY + y;
-                scrollRef.current?.scrollTo({ y: Math.max(0, absoluteY - 120), animated: true });
+            if (targetRef && scrollNode) {
+                (targetRef as any).measureLayout(
+                    scrollNode,
+                    (x: number, y: number) => {
+                        scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+                    },
+                    () => {
+                        if (attempt < 15) {
+                            attempt++;
+                            setTimeout(tryScroll, 300);
+                        }
+                    }
+                );
             } else if (attempt < 15) {
-                // Element not laid out yet (infinite scroll or deferred rendering pending), try again
                 attempt++;
                 setTimeout(tryScroll, 300);
             }
@@ -409,21 +402,28 @@ export default function SurahScreen() {
     useEffect(() => {
         if (!loadingInitial && resumedAyahIndex !== null && scrollRef.current) {
             setTimeout(() => {
-                const y = ayahLayoutsRef.current[startId]?.[resumedAyahIndex];
-                if (y !== undefined && scrollRef.current) {
-                    scrollRef.current.scrollTo({ y: y - 120, animated: true });
+                const targetRef = ayahRefsRef.current[startId]?.[resumedAyahIndex];
+                const scrollNode = scrollRef.current as any;
+                if (targetRef && scrollNode) {
+                    (targetRef as any).measureLayout(
+                        scrollNode,
+                        (x: number, y: number) => {
+                            scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+                        },
+                        () => {} // ignore error
+                    );
                 }
             }, 600);
         }
     }, [loadingInitial, resumedAyahIndex, startId]);
 
-    const onBismillahLayout = useCallback((surahNum: number, y: number) => {
-        bismillahLayoutsRef.current[surahNum] = y;
+    const onBismillahRef = useCallback((surahNum: number, ref: View | null) => {
+        bismillahRefsRef.current[surahNum] = ref;
     }, []);
 
-    const onAyahLayout = useCallback((surahNum: number, index: number, y: number) => {
-        if (!ayahLayoutsRef.current[surahNum]) ayahLayoutsRef.current[surahNum] = {};
-        ayahLayoutsRef.current[surahNum][index] = y;
+    const onAyahRef = useCallback((surahNum: number, index: number, ref: View | null) => {
+        if (!ayahRefsRef.current[surahNum]) ayahRefsRef.current[surahNum] = {};
+        ayahRefsRef.current[surahNum][index] = ref;
     }, []);
 
     const onBlockLayout = useCallback((surah: SurahDetail, y: number) => {
@@ -496,29 +496,15 @@ export default function SurahScreen() {
                                 player={player}
                                 isAyahFav={isAyahFav}
                                 toggleAyah={toggleAyah}
-                                onBismillahLayout={onBismillahLayout}
-                                onAyahLayout={onAyahLayout}
+                                onBismillahRef={onBismillahRef}
+                                onAyahRef={onAyahRef}
                                 onBlockLayout={onBlockLayout}
                                 resumedAyahIndex={surah.number === startId ? resumedAyahIndex : null}
                             />
                         ))}
 
 
-                        {/* Load-more spinner */}
-                        {loadingMore && (
-                            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-                                <ActivityIndicator size="small" color="#B8882A" />
-                                <Text style={{ color: '#B8882A', fontFamily: 'Amiri', marginTop: 6 }}>
-                                    جارٍ تحميل السورة التالية...
-                                </Text>
-                            </View>
-                        )}
 
-                        {nextIdRef.current > 114 && (
-                            <Text style={s.endText}>
-                                خَتَمَ اللهُ لَنَا بِالخَيْرِ
-                            </Text>
-                        )}
                             </View>
                         </View>
                     </View>
@@ -717,6 +703,11 @@ const blockStyles = (colors: any) =>
         ayahMarker: {
             fontFamily: 'Amiri',
             color: BORDER_OUTER,
+        },
+        ayahRow: {
+            width: '100%',
+            paddingVertical: 4,
+            paddingHorizontal: 2,
         },
 
         // ── Divider ──────────────────────────────────

@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { createAudioPlayer, useAudioPlayerStatus, setAudioModeAsync, AudioPlayer } from 'expo-audio';
-import { getAyahAudioUrl } from '../services/audioService';
-import { downloadSurahAudio, getCachedUri, isSurahFullyCached } from '../services/audioCacheService';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
+import { downloadSurahAudio, isSurahFullyCached } from '../services/audioCacheService';
+import { buildSurahTrack } from '../services/audioMergeService';
 import { saveLastPosition } from '../services/storageService';
 import { PRIMARY_AUDIO_BASE } from '../constants/reciters';
 import type { Ayah } from '../services/quranApi';
@@ -12,6 +12,7 @@ export interface PlayerState {
     isPlaying: boolean;
     isLoading: boolean;
     isLooping: boolean;
+    repeatCount: number;
     isBismillahPlaying: boolean;
     currentSurahNumber: number | null;
     currentAyahIndex: number;
@@ -19,6 +20,8 @@ export interface PlayerState {
     position: number; // in ms
     reciterBaseUrl: string;
     downloadProgress: number; // 0 to 1
+    sleepTimerEndsAt: number | null; // timestamp in ms, null = no timer
+    sleepTimerDuration: number | null; // configured duration in minutes, null = no timer
 }
 export interface PlayerContextType {
     state: PlayerState;
@@ -28,25 +31,31 @@ export interface PlayerContextType {
     next: () => void;
     previous: () => void;
     toggleLoop: () => void;
+    cycleRepeat: () => void;
     stop: () => Promise<void>;
     setReciter: (baseUrl: string) => void;
     initializeSurah: (surahNumber: number, ayahs: Ayah[], initialAyahIndex?: number) => void;
+    setSleepTimer: (minutes: number | null) => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-    const player1Ref = useRef<AudioPlayer>(createAudioPlayer(null));
-    const player2Ref = useRef<AudioPlayer>(createAudioPlayer(null));
-    const activePlayerIdx = useRef<1 | 2>(1);
+    const playerRef = useRef<AudioPlayer>(createAudioPlayer(null));
     
     const ayahsRef = useRef<Ayah[]>([]);
+    const ayahOffsetsRef = useRef<{ numberInSurah: number; startMs: number; endMs: number }[]>([]);
     const isLoopingRef = useRef(false);
+    const repeatCountRef = useRef(1);
+    const currentRepeatRef = useRef(1);
+    const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const reciterBaseUrlRef = useRef(PRIMARY_AUDIO_BASE);
     
     const [state, setState] = useState<PlayerState>({
         isPlaying: false,
         isLoading: false,
         isLooping: false,
+        repeatCount: 1,
         isBismillahPlaying: false,
         currentSurahNumber: null,
         currentAyahIndex: 0,
@@ -54,13 +63,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         position: 0,
         reciterBaseUrl: PRIMARY_AUDIO_BASE,
         downloadProgress: 0,
+        sleepTimerEndsAt: null,
+        sleepTimerDuration: null,
     });
-
-    const getActivePlayer = () => activePlayerIdx.current === 1 ? player1Ref.current : player2Ref.current;
-    const getInactivePlayer = () => activePlayerIdx.current === 1 ? player2Ref.current : player1Ref.current;
 
     const onDidJustFinishRef = useRef<() => void>(() => {});
     const hasLoadedUrlRef = useRef(false);
+
+    useEffect(() => {
+        reciterBaseUrlRef.current = state.reciterBaseUrl;
+    }, [state.reciterBaseUrl]);
+
+    const currentSurahRef = useRef<number | null>(null);
+    const currentIndexRef = useRef(0);
 
     useEffect(() => {
         const configureAudio = () =>
@@ -76,110 +91,147 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             if (next === 'active') configureAudio();
         });
 
-        // Combined listener for both players
-        const setupListener = (p: AudioPlayer, id: number) => {
-            return p.addListener('playbackStatusUpdate', (status) => {
-                // SAFETY: If an INACTIVE player is playing, stop it.
-                if (activePlayerIdx.current !== id && status.playing) {
-                    p.pause();
-                    return;
-                }
+        const sub = playerRef.current.addListener('playbackStatusUpdate', (status) => {
+            const posMs = status.currentTime * 1000;
+            const offsets = ayahOffsetsRef.current;
+            
+            let isBism = false;
+            let newIndex = currentIndexRef.current;
 
-                // Only update global state if this is the ACTIVE player
-                if (activePlayerIdx.current === id) {
-                    setState(prev => ({
-                        ...prev,
-                        isPlaying: status.playing,
-                        duration: status.duration * 1000,
-                        position: status.currentTime * 1000,
-                        isLoading: status.isBuffering && !status.playing,
-                    }));
+            if (offsets.length > 0 && status.playing) {
+                const currentAyahOffset = offsets[currentIndexRef.current];
+                
+                // Track Bismillah (if before first ayah)
+                isBism = posMs < offsets[0].startMs && currentSurahRef.current! > 1 && currentSurahRef.current !== 9;
 
-                    if (status.didJustFinish) {
-                        onDidJustFinishRef.current();
+                if (currentAyahOffset && posMs >= currentAyahOffset.endMs) {
+                    if (repeatCountRef.current > 1 && currentRepeatRef.current < repeatCountRef.current) {
+                        currentRepeatRef.current += 1;
+                        playerRef.current.seekTo(currentAyahOffset.startMs / 1000);
+                        return; // Skip state update to avoid flickers
+                    } else {
+                        currentRepeatRef.current = 1;
+                        newIndex = currentIndexRef.current + 1;
                     }
                 }
-            });
-        };
 
-        const sub1 = setupListener(player1Ref.current, 1);
-        const sub2 = setupListener(player2Ref.current, 2);
+                // If jumping via seek or normal advance
+                if (!currentAyahOffset || posMs < currentAyahOffset.startMs || posMs > currentAyahOffset.endMs) {
+                    const foundIndex = offsets.findIndex(o => posMs >= o.startMs && posMs < o.endMs);
+                    if (foundIndex !== -1 && foundIndex !== currentIndexRef.current) {
+                        newIndex = foundIndex;
+                    }
+                }
+            }
+
+            // Did the index change?
+            if (newIndex !== currentIndexRef.current && newIndex < offsets.length) {
+                currentIndexRef.current = newIndex;
+                
+                const ayah = ayahsRef.current[newIndex];
+                if (ayah && currentSurahRef.current) {
+                    saveLastPosition({
+                        surahNumber: currentSurahRef.current,
+                        surahName: ayah.surah?.name || `Sourate ${currentSurahRef.current}`,
+                        ayahNumber: ayah.numberInSurah,
+                        type: 'listening',
+                    });
+                }
+            }
+
+            setState(prev => ({
+                ...prev,
+                isPlaying: status.playing,
+                duration: status.duration * 1000,
+                position: posMs,
+                isLoading: status.isBuffering && !status.playing,
+                currentAyahIndex: currentIndexRef.current,
+                isBismillahPlaying: isBism,
+            }));
+
+            if (status.didJustFinish) {
+                onDidJustFinishRef.current();
+            }
+        });
 
         return () => {
             appStateSub.remove();
-            sub1.remove();
-            sub2.remove();
-            player1Ref.current.remove();
-            player2Ref.current.remove();
+            sub.remove();
+            playerRef.current.remove();
         };
     }, []);
 
-    // Auto-advance logic (moved to a function to be called from the listener)
-    // We use refs for surah/index to avoid stale closures in the listener
-    const currentSurahRef = useRef<number | null>(null);
-    const currentIndexRef = useRef(0);
-    const isBismillahPlayingRef = useRef(false);
-
-    const preloadNext = useCallback(async (surahNumber: number, ayahIndex: number) => {
+    const loadAndPlayInner = useCallback(async (surahNumber: number, ayahIndex: number) => {
         try {
-            const nextIdx = ayahIndex + 1;
-            if (nextIdx < ayahsRef.current.length) {
-                const url = await getCachedUri(surahNumber, ayahsRef.current[nextIdx].numberInSurah, state.reciterBaseUrl);
-                const p = getInactivePlayer();
-                p.pause(); // Safety: make sure it's not playing
-                p.replace(url);
-            }
-        } catch (e) {
-            console.error('Preload error:', e);
-        }
-    }, [state.reciterBaseUrl]);
-
-    const loadAndPlayInner = useCallback(async (surahNumber: number, ayahIndex: number, skipBismillah: boolean = false) => {
-        try {
-            const playBismillah = !skipBismillah && ayahIndex === 0 && surahNumber > 1 && surahNumber !== 9;
-
-            isBismillahPlayingRef.current = playBismillah;
             currentSurahRef.current = surahNumber;
             currentIndexRef.current = ayahIndex;
+            currentRepeatRef.current = 1;
 
             setState(prev => ({
                 ...prev,
                 isLoading: true,
                 currentSurahNumber: surahNumber,
-                isBismillahPlaying: playBismillah,
                 currentAyahIndex: ayahIndex,
             }));
 
-            const ayah = ayahsRef.current[ayahIndex];
-            if (!ayah) return;
+            const ayahs = ayahsRef.current;
+            if (ayahs.length === 0) return;
 
-            saveLastPosition({
-                surahNumber: surahNumber,
-                surahName: ayah.surah?.name || `Sourate ${surahNumber}`,
-                ayahNumber: ayah.numberInSurah,
-                type: 'listening',
-            });
+            const merged = await buildSurahTrack(surahNumber, ayahs, reciterBaseUrlRef.current);
+            ayahOffsetsRef.current = merged.ayahOffsets;
 
-            const url = playBismillah
-                ? await getCachedUri(1, 1, state.reciterBaseUrl)
-                : await getCachedUri(surahNumber, ayah.numberInSurah, state.reciterBaseUrl);
+            await playerRef.current.replace(merged.uri);
 
+            try {
+                playerRef.current.setActiveForLockScreen(true, {
+                    title: ayahs[0]?.surah?.name || `Sourate ${surahNumber}`,
+                    artist: 'Al-Quran Hafs',
+                    albumTitle: 'Coran Complet',
+                });
+            } catch (e) {
+                console.log("Lock screen metadata unsupported", e);
+            }
+
+            if (ayahIndex === 0) {
+                playerRef.current.seekTo(0);
+            } else {
+                const offset = merged.ayahOffsets[ayahIndex];
+                if (offset) {
+                    playerRef.current.seekTo(offset.startMs / 1000);
+                }
+            }
+            
+            playerRef.current.play();
             hasLoadedUrlRef.current = true;
-            const p = getActivePlayer();
-            p.replace(url);
-            p.play();
 
             setState(prev => ({ ...prev, isLoading: false }));
-
-            // PRELOAD the next one in the other player
-            if (!playBismillah) {
-                preloadNext(surahNumber, ayahIndex);
-            }
         } catch (error) {
             console.error('Audio load error:', error);
             setState(prev => ({ ...prev, isLoading: false, isPlaying: false }));
         }
-    }, [state.reciterBaseUrl, preloadNext]);
+    }, []);
+
+    const playRef = useRef<PlayerContextType['play']>(async () => {});
+
+    const handleAutoAdvance = useCallback(async () => {
+        const surahNumber = currentSurahRef.current;
+        if (!surahNumber) return;
+
+        if (isLoopingRef.current) {
+            playerRef.current.seekTo(0);
+            playerRef.current.play();
+        } else {
+            setState(prev => ({
+                ...prev,
+                isPlaying: false,
+                currentAyahIndex: 0,
+            }));
+        }
+    }, []);
+
+    useEffect(() => {
+        onDidJustFinishRef.current = handleAutoAdvance;
+    }, [handleAutoAdvance]);
 
     const play = useCallback(
         async (surahNumber: number, ayahIndex: number, newAyahs?: Ayah[]) => {
@@ -195,7 +247,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             const isFullyCached = await isSurahFullyCached(surahNumber, ayahsRef.current.length, state.reciterBaseUrl);
 
             if (!isFullyCached) {
-                setState(prev => ({ ...prev, isLoading: true, downloadProgress: 0.01 })); // 0.01 to show initial UI
+                setState(prev => ({ ...prev, isLoading: true, downloadProgress: 0.01 }));
                 try {
                     await downloadSurahAudio(
                         surahNumber,
@@ -217,113 +269,86 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         [loadAndPlayInner, state.reciterBaseUrl]
     );
 
-    const lastAdvanceTimeRef = useRef(0);
-
-    const handleAutoAdvance = useCallback(() => {
-        const now = Date.now();
-        if (now - lastAdvanceTimeRef.current < 500) return; // Debounce duplicate events
-        lastAdvanceTimeRef.current = now;
-
-        const surahNumber = currentSurahRef.current;
-        const ayahIndex = currentIndexRef.current;
-        const playBismillah = isBismillahPlayingRef.current;
-
-        if (!surahNumber) return;
-
-        if (playBismillah) {
-            loadAndPlayInner(surahNumber, ayahIndex, true);
-        } else if (isLoopingRef.current) {
-            const p = getActivePlayer();
-            p.seekTo(0);
-            p.play();
-        } else if (ayahIndex < ayahsRef.current.length - 1) {
-            // GAPLESS SWITCH
-            const oldPlayer = getActivePlayer();
-            oldPlayer.pause(); // Ensure old is silent
-            
-            activePlayerIdx.current = activePlayerIdx.current === 1 ? 2 : 1;
-            const p = getActivePlayer();
-            
-            p.play(); 
-            
-            currentIndexRef.current = ayahIndex + 1;
-            setState(prev => ({ ...prev, currentAyahIndex: ayahIndex + 1 }));
-
-            preloadNext(surahNumber, ayahIndex + 1);
-        } else if (surahNumber < 114) {
-             // Surah finished, auto continue to the next surah
-             const nextSurahNum = surahNumber + 1;
-             
-             setState(prev => ({
-                 ...prev,
-                 isLoading: true,
-                 currentSurahNumber: nextSurahNum,
-                 currentAyahIndex: 0,
-             }));
-
-             getSurah(nextSurahNum).then(nextSurah => {
-                 play(nextSurahNum, 0, nextSurah.ayahs);
-             }).catch(e => {
-                 console.error("Failed to continue to next surah automatically", e);
-                 setState(prev => ({ ...prev, isPlaying: false, isLoading: false }));
-             });
-        } else {
-            setState(prev => ({
-                ...prev,
-                isPlaying: false,
-                currentAyahIndex: 0,
-            }));
-        }
-    }, [loadAndPlayInner, play]);
-
     useEffect(() => {
-        onDidJustFinishRef.current = handleAutoAdvance;
-    }, [handleAutoAdvance]);
+        playRef.current = play;
+    }, [play]);
 
     const pause = useCallback(async () => {
-        getActivePlayer().pause();
+        playerRef.current.pause();
     }, []);
 
     const resume = useCallback(async () => {
         if (!hasLoadedUrlRef.current && state.currentSurahNumber !== null) {
             play(state.currentSurahNumber, state.currentAyahIndex, ayahsRef.current);
         } else {
-            getActivePlayer().play();
+            playerRef.current.play();
         }
     }, [state.currentSurahNumber, state.currentAyahIndex, play]);
 
     const next = useCallback(() => {
         if (!state.currentSurahNumber) return;
         const nextIdx = state.currentAyahIndex + 1;
-        if (nextIdx < ayahsRef.current.length) {
-            loadAndPlayInner(state.currentSurahNumber, nextIdx);
+        const offsets = ayahOffsetsRef.current;
+        if (nextIdx < offsets.length) {
+            currentRepeatRef.current = 1;
+            playerRef.current.seekTo(offsets[nextIdx].startMs / 1000);
+            playerRef.current.play();
         }
-    }, [state.currentSurahNumber, state.currentAyahIndex, loadAndPlayInner]);
+    }, [state.currentSurahNumber, state.currentAyahIndex]);
 
     const previous = useCallback(() => {
         if (!state.currentSurahNumber) return;
         const prevIdx = state.currentAyahIndex - 1;
+        const offsets = ayahOffsetsRef.current;
         if (prevIdx >= 0) {
-            loadAndPlayInner(state.currentSurahNumber, prevIdx);
+            currentRepeatRef.current = 1;
+            playerRef.current.seekTo(offsets[prevIdx].startMs / 1000);
+            playerRef.current.play();
+        } else if (prevIdx === -1) {
+            currentRepeatRef.current = 1;
+            playerRef.current.seekTo(0);
+            playerRef.current.play();
         }
-    }, [state.currentSurahNumber, state.currentAyahIndex, loadAndPlayInner]);
+    }, [state.currentSurahNumber, state.currentAyahIndex]);
 
     const toggleLoop = useCallback(() => {
         isLoopingRef.current = !isLoopingRef.current;
-        setState(prev => ({ ...prev, isLooping: isLoopingRef.current }));
+        if (isLoopingRef.current) {
+            repeatCountRef.current = 1;
+            currentRepeatRef.current = 1;
+        }
+        setState(prev => ({ ...prev, isLooping: isLoopingRef.current, repeatCount: 1 }));
+    }, []);
+
+    const REPEAT_CYCLE = [1, 2, 3, 5];
+    const cycleRepeat = useCallback(() => {
+        if (isLoopingRef.current) {
+            isLoopingRef.current = false;
+        }
+        const currentIdx = REPEAT_CYCLE.indexOf(repeatCountRef.current);
+        const nextRepeat = REPEAT_CYCLE[(currentIdx + 1) % REPEAT_CYCLE.length];
+        repeatCountRef.current = nextRepeat;
+        currentRepeatRef.current = 1;
+        setState(prev => ({ ...prev, repeatCount: nextRepeat, isLooping: false }));
     }, []);
 
     const stop = useCallback(async () => {
-        player1Ref.current.pause();
-        player2Ref.current.pause();
+        playerRef.current.pause();
         hasLoadedUrlRef.current = false;
+        currentRepeatRef.current = 1;
+        if (sleepTimerRef.current) {
+            clearInterval(sleepTimerRef.current);
+            sleepTimerRef.current = null;
+        }
         setState(prev => ({
             ...prev,
             isPlaying: false,
             isLoading: false,
             currentSurahNumber: null,
             currentAyahIndex: 0,
-            downloadProgress: 0
+            downloadProgress: 0,
+            sleepTimerEndsAt: null,
+            sleepTimerDuration: null,
         }));
     }, []);
 
@@ -343,6 +368,36 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }));
     }, []);
 
+    const setSleepTimer = useCallback((minutes: number | null) => {
+        if (sleepTimerRef.current) {
+            clearInterval(sleepTimerRef.current);
+            sleepTimerRef.current = null;
+        }
+
+        if (minutes === null) {
+            setState(prev => ({ ...prev, sleepTimerEndsAt: null, sleepTimerDuration: null }));
+            return;
+        }
+
+        const endsAt = Date.now() + minutes * 60 * 1000;
+        setState(prev => ({ ...prev, sleepTimerEndsAt: endsAt, sleepTimerDuration: minutes }));
+
+        sleepTimerRef.current = setInterval(() => {
+            if (Date.now() >= endsAt) {
+                if (sleepTimerRef.current) {
+                    clearInterval(sleepTimerRef.current);
+                    sleepTimerRef.current = null;
+                }
+                playerRef.current.pause();
+                setState(prev => ({
+                    ...prev,
+                    isPlaying: false,
+                    sleepTimerEndsAt: null,
+                    sleepTimerDuration: null,
+                }));
+            }
+        }, 1000);
+    }, []);
 
     const value = {
         state,
@@ -352,9 +407,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         next,
         previous,
         toggleLoop,
+        cycleRepeat,
         stop,
         setReciter,
         initializeSurah,
+        setSleepTimer,
     };
 
     return (
